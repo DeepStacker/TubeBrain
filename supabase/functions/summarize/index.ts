@@ -251,12 +251,19 @@ Rules:
       { role: "user", content: combinedContext }
     ], apiKey);
 
+    if (!content) {
+      throw new Error(`AI Provider (${provider}) returned an empty response. Check your API key and quota.`);
+    }
+
     let summary;
     try {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-      summary = JSON.parse(jsonMatch[1].trim());
-    } catch {
-      throw new Error("Failed to parse AI response as JSON.");
+      // Find JSON block or treat whole response as JSON
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      const jsonString = jsonMatch ? jsonMatch[1].trim() : content.trim();
+      summary = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error("JSON Parse Error. Content:", content);
+      throw new Error(`Failed to parse AI response as JSON. The model may have returned malformed text. Error: ${parseError.message}`);
     }
 
     // Return primary video info + all transcripts for the chat feature
@@ -276,8 +283,13 @@ Rules:
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+    console.error("Function Error:", error);
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : "Internal Server Error",
+      details: "Check Supabase Edge Function logs for more info."
+    }), {
+      status: 200, // Return 200 with error object so the frontend can show it nicely instead of a raw 500
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });
