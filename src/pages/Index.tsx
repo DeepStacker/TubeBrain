@@ -19,7 +19,8 @@ import {
   Download,
   ExternalLink,
   ChevronRight,
-  Coins
+  Coins,
+  Play
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import LearnTools from "@/components/LearnTools";
@@ -117,6 +118,7 @@ const Index = () => {
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [estimatedRemaining, setEstimatedRemaining] = useState<number | null>(null);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [isVideoMinimized, setIsVideoMinimized] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
 
   // User & Auth State
@@ -572,6 +574,38 @@ const Index = () => {
     setMetadata(item.metadata);
     setActiveView("analysis");
 
+    // Fetch full details if it's already completed to ensure transcript is loaded
+    if (item.status === "completed") {
+      try {
+        const res = await apiFetch(`/analysis/${item.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const { analysis, video, transcript_text, transcript_segments } = data;
+          
+          const sData: SummaryData = {
+            overview: analysis.overview || "",
+            keyPoints: analysis.key_points || [],
+            takeaways: analysis.takeaways || [],
+            timestamps: (analysis.timestamps || []).map((t: any) => ({
+              time: t.timestamp !== undefined ? t.timestamp : t.time,
+              label: t.topic || t.label
+            })),
+            tags: analysis.tags || [],
+            quiz: analysis.quiz,
+            roadmap: analysis.roadmap,
+            mind_map: analysis.mind_map,
+            flashcards: analysis.flashcards,
+            transcript_segments: transcript_segments || analysis.transcript_segments
+          };
+
+          setSummaryData(sData);
+          setTranscript(transcript_text);
+        }
+      } catch (err) {
+        console.error("Failed to fetch full analysis details:", err);
+      }
+    }
+
     if (item.status === "pending" || item.status === "queued" || (!item.summaryData.overview && item.status !== "failed")) {
         setAnalysisStatus("pending");
         setActiveAnalysisId(item.id);
@@ -851,19 +885,29 @@ const Index = () => {
               </div>
            </div>
            
-           <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsFocusMode(!isFocusMode)}
-                className={cn(
-                  "rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest border-gray-100",
-                  isFocusMode && "bg-black text-white border-black"
-                )}
-              >
-                {isFocusMode ? "Exit Focus" : "Focus Mode"}
-              </Button>
-           </div>
+               <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsFocusMode(!isFocusMode)}
+                    className={cn(
+                      "rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest border-gray-100",
+                      isFocusMode && "bg-black text-white border-black"
+                    )}
+                  >
+                    {isFocusMode ? "Exit Focus" : "Focus Mode"}
+                  </Button>
+                  {activeView === "analysis" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsVideoMinimized(!isVideoMinimized)}
+                      className="rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest border-gray-100"
+                    >
+                      {isVideoMinimized ? "Show Video" : "Hide Video"}
+                    </Button>
+                  )}
+               </div>
         </div>
 
         <AnimatePresence mode="wait">
@@ -904,12 +948,45 @@ const Index = () => {
                     </div>
                   </header>
 
-                  <VideoPreview 
-                    videoId={videoIds[0]} 
-                    {...videoData}
-                    thumbnail={`https://img.youtube.com/vi/${videoIds[0]}/maxresdefault.jpg`}
-                    iframeRef={iframeRef} 
-                  />
+                  <div className={cn(
+                    "transition-all duration-500 ease-in-out origin-top relative group",
+                    isVideoMinimized ? "h-0 opacity-0 pointer-events-none mb-0 overflow-hidden" : "h-auto opacity-100 mb-8 sticky top-0 z-40 bg-white/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 rounded-b-3xl border-b border-gray-100"
+                  )}>
+                    {!isVideoMinimized && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsVideoMinimized(true)}
+                        className="absolute top-4 right-6 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Minimize Video"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <VideoPreview 
+                      videoId={videoIds[0]} 
+                      {...videoData}
+                      thumbnail={`https://img.youtube.com/vi/${videoIds[0]}/maxresdefault.jpg`}
+                      iframeRef={iframeRef} 
+                    />
+                  </div>
+
+                  {isVideoMinimized && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="sticky top-0 z-40 pb-4"
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsVideoMinimized(false)}
+                        className="w-full rounded-2xl border-dashed border-gray-200 bg-gray-50/50 hover:bg-gray-100 transition-all font-bold uppercase tracking-widest text-[10px] h-10 gap-2"
+                      >
+                        <Play className="h-3 w-3" /> Show Video Player
+                      </Button>
+                    </motion.div>
+                  )}
                   
                   {isLoading || (activeAnalysisId && !summaryData) ? (
                     <motion.div 
