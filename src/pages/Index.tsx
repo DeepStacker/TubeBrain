@@ -20,7 +20,9 @@ import {
   ExternalLink,
   ChevronRight,
   Coins,
-  Play
+  Play,
+  MoreHorizontal,
+  Menu
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import LearnTools from "@/components/LearnTools";
@@ -90,6 +92,7 @@ const Index = () => {
   const [activeView, setActiveView] = useState<"dashboard" | "analysis" | "history" | "library" | "space" | "settings">("dashboard");
   const [expertise, setExpertise] = useState<"Beginner" | "Intermediate" | "Expert">("Intermediate");
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // ... existing states
@@ -757,26 +760,45 @@ const Index = () => {
 
   return (
     <div className="flex bg-white h-screen overflow-hidden text-foreground">
+      {/* Sidebar - hidden on mobile unless toggled, always visible on desktop unless focus mode */}
       {!isFocusMode && (
-        <Sidebar 
-          onViewChange={handleSidebarClick} 
-          activeView={
-            activeView === "dashboard" ? "Search" : 
-            activeView === "space" ? selectedSpace?.name :
-            activeView === "settings" ? "Settings" :
-            activeView.charAt(0).toUpperCase() + activeView.slice(1)
-          }
-          recents={historyItems.slice(0, 5).map(h => h.title)}
-          spaces={spaces}
-          onCreateSpace={handleCreateNewSpace}
-          onRenameSpace={handleRenameSpace}
-          onDeleteSpace={handleDeleteSpace}
-          user={user}
-          credits={credits}
-          onLogout={handleLogout}
-          onAuthSuccess={fetchUserData}
-          onTopUp={() => setIsTopUpOpen(true)}
-        />
+        <>
+          {/* Mobile overlay */}
+          {isSidebarOpen && (
+            <div 
+              className="fixed inset-0 bg-black/20 z-40 lg:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
+          <div className={cn(
+            "fixed lg:relative z-50 lg:z-auto transition-transform duration-200",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          )}>
+            <Sidebar 
+              onViewChange={(view) => {
+                handleSidebarClick(view);
+                // Close sidebar on mobile after navigation
+                if (window.innerWidth < 1024) setIsSidebarOpen(false);
+              }} 
+              activeView={
+                activeView === "dashboard" ? "Search" : 
+                activeView === "space" ? selectedSpace?.name :
+                activeView === "settings" ? "Settings" :
+                activeView.charAt(0).toUpperCase() + activeView.slice(1)
+              }
+              recents={historyItems.slice(0, 5).map(h => h.title)}
+              spaces={spaces}
+              onCreateSpace={handleCreateNewSpace}
+              onRenameSpace={handleRenameSpace}
+              onDeleteSpace={handleDeleteSpace}
+              user={user}
+              credits={credits}
+              onLogout={handleLogout}
+              onAuthSuccess={fetchUserData}
+              onTopUp={() => setIsTopUpOpen(true)}
+            />
+          </div>
+        </>
       )}
       
       {/* ... Feedback Dialog ... */}
@@ -910,56 +932,92 @@ const Index = () => {
       )}
       
       <main className="flex-1 relative overflow-y-auto">
-        {/* Advanced Top Bar */}
-        <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-3 flex items-center justify-between">
-           <div className="flex items-center gap-4">
+        {/* Top Bar */}
+        <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 px-6 py-2.5 flex items-center justify-between">
+           <div className="flex items-center gap-3 min-w-0">
               {isFocusMode && (
                 <button 
                   onClick={() => setIsFocusMode(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-all shrink-0"
                 >
                   <PlusCircle className="h-5 w-5 rotate-45" />
                 </button>
               )}
-              <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-2xl border border-gray-100">
-                 {(["Beginner", "Intermediate", "Expert"] as const).map((level) => (
-                    <button
-                      key={level}
-                      onClick={() => setExpertise(level)}
-                      className={cn(
-                        "px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
-                        expertise === level ? "bg-black text-white shadow-lg" : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {level}
-                    </button>
-                 ))}
-              </div>
+              {!isFocusMode && (
+                <button 
+                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-all shrink-0 lg:hidden"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              )}
+              {!isFocusMode && (
+                <div className="flex items-center gap-1.5 shrink-0 lg:hidden">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 6h2v12H4V6zm6 0h2v12h-2V6z" fill="currentColor"/>
+                  </svg>
+                </div>
+              )}
+              {activeView === "analysis" && videoData ? (
+                <h1 className="text-sm font-medium text-foreground truncate">{videoData.title}</h1>
+              ) : (
+                <div className="flex items-center gap-1 bg-gray-50 p-0.5 rounded-lg border border-gray-100">
+                   {(["Beginner", "Intermediate", "Expert"] as const).map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => setExpertise(level)}
+                        className={cn(
+                          "px-3 py-1.5 text-xs rounded-md transition-all",
+                          expertise === level ? "bg-white text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {level}
+                      </button>
+                   ))}
+                </div>
+              )}
            </div>
            
-               <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsFocusMode(!isFocusMode)}
-                    className={cn(
-                      "rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest border-gray-100",
-                      isFocusMode && "bg-black text-white border-black"
-                    )}
-                  >
-                    {isFocusMode ? "Exit Focus" : "Focus Mode"}
-                  </Button>
-                  {activeView === "analysis" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsVideoMinimized(!isVideoMinimized)}
-                      className="rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest border-gray-100"
-                    >
-                      {isVideoMinimized ? "Show Video" : "Hide Video"}
-                    </Button>
-                  )}
-               </div>
+           <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsTopUpOpen(true)}
+                className="rounded-full h-8 px-4 text-xs font-medium bg-green-600 hover:bg-green-700 text-white"
+              >
+                Upgrade
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFocusMode(!isFocusMode)}
+                className={cn(
+                  "rounded-lg h-8 px-3 text-xs font-medium border-gray-200",
+                  isFocusMode && "bg-gray-900 text-white border-gray-900"
+                )}
+              >
+                {isFocusMode ? "Exit Focus" : "New Exam"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const url = window.location.href;
+                  navigator.clipboard.writeText(url);
+                  toast.success("Link copied!");
+                }}
+                className="rounded-lg h-8 px-3 text-xs font-medium border-gray-200"
+              >
+                Share
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-400"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+           </div>
         </div>
 
         <AnimatePresence mode="wait">
@@ -971,38 +1029,11 @@ const Index = () => {
               exit={{ opacity: 0 }}
               className="flex h-full"
             >
-              <div className="flex-1 overflow-y-auto p-6 lg:p-10">
-                <div className="max-w-5xl mx-auto space-y-8 pb-20">
-                  <header className="flex items-center justify-between mb-2">
-                    <Button 
-                      variant="ghost" 
-                      onClick={handleBackToDashboard}
-                      className="gap-2 -ml-4 text-muted-foreground hover:text-foreground font-bold uppercase tracking-tight text-[10px]"
-                    >
-                      <ChevronLeft className="h-4 w-4" /> Back to Dashboard
-                    </Button>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="rounded-xl border-gray-100 font-bold uppercase tracking-tight text-[10px] h-8"
-                        onClick={() => {
-                          const url = window.location.href;
-                          navigator.clipboard.writeText(url);
-                          toast.success("Share link copied to clipboard!");
-                        }}
-                      >
-                        <Share2 className="h-3 w-3 mr-2" /> Share
-                      </Button>
-                      <Button variant="outline" size="icon" className="rounded-xl border-gray-100 h-8 w-8">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </header>
-
+              <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                <div className="max-w-4xl mx-auto space-y-6 pb-20">
                   <div className={cn(
                     "transition-all duration-500 ease-in-out origin-top relative group",
-                    isVideoMinimized ? "h-0 opacity-0 pointer-events-none mb-0 overflow-hidden" : "h-auto opacity-100 mb-8 sticky top-0 z-40 bg-white/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 rounded-b-3xl border-b border-gray-100"
+                    isVideoMinimized ? "h-0 opacity-0 pointer-events-none mb-0 overflow-hidden" : "h-auto opacity-100"
                   )}>
                     {!isVideoMinimized && (
                       <Button

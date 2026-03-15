@@ -20,10 +20,10 @@ const VideoPreview = ({ videoId, title, channel, duration, views, likes, publish
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-      className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm"
+      transition={{ duration: 0.5 }}
+      className="bg-black rounded-xl overflow-hidden"
     >
       {/* Full-width video player */}
       <div className={`relative w-full bg-black ${compact ? "aspect-video" : "aspect-video"}`}>

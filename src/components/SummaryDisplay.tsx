@@ -165,71 +165,46 @@ const SummaryDisplay = ({
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="space-y-8 pb-20">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-8 border-b pb-1">
-          <TabsList className="bg-transparent p-0 gap-8 h-auto">
+        <div className="flex items-center justify-between mb-6">
+          <TabsList className="bg-transparent p-0 gap-6 h-auto">
             <TabsTrigger 
               value="chapters" 
-              className="px-0 py-2 text-sm font-bold data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-green-500 rounded-none bg-transparent gap-2"
+              className="px-0 py-2 text-sm font-medium data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-green-500 rounded-none bg-transparent gap-2"
             >
-              <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
               Chapters
             </TabsTrigger>
             <TabsTrigger 
               value="transcripts" 
-              className="px-0 py-2 text-sm font-bold data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-blue-500 rounded-none bg-transparent gap-2"
+              className="px-0 py-2 text-sm font-medium data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-foreground rounded-none bg-transparent gap-2"
             >
-              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+              <span className="text-muted-foreground text-xs">T</span>
               Transcripts
-            </TabsTrigger>
-            <TabsTrigger 
-              value="flashcards" 
-              className="px-0 py-2 text-sm font-bold data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-orange-500 rounded-none bg-transparent gap-2"
-            >
-              <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-              Flashcards
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center gap-4">
-             {spaces.length > 0 && (
-               <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors border px-3 py-1.5 rounded-xl">
-                      <Plus className="h-3.5 w-3.5" />
-                      Save to Space
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-2xl border-gray-100 shadow-xl p-2 w-48">
-                    {spaces.map(space => (
-                      <DropdownMenuItem 
-                        key={space.id} 
-                        onClick={() => onAddToSpace?.(space.id)}
-                        className="rounded-xl font-bold text-xs py-2.5 cursor-pointer"
-                      >
-                        {space.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-               </DropdownMenu>
-             )}
+          <div className="flex items-center gap-3">
              <button 
                onClick={() => setIsAutoScroll(!isAutoScroll)}
                className={cn(
-                 "flex items-center gap-2 text-xs font-bold transition-colors border px-3 py-1.5 rounded-xl",
-                 isAutoScroll ? "text-green-600 border-green-100 bg-green-50" : "text-muted-foreground hover:text-foreground"
+                 "flex items-center gap-2 text-xs font-medium transition-colors px-3 py-1.5 rounded-full border",
+                 isAutoScroll ? "text-foreground border-gray-200 bg-white" : "text-muted-foreground border-gray-100 hover:border-gray-200"
                )}
              >
-                <Eye className="h-3.5 w-3.5" />
-                {isAutoScroll ? "Auto Scroll ON" : "Auto Scroll OFF"}
+                <ChevronDown className="h-3 w-3" />
+                Auto Scroll
              </button>
-             <button onClick={handleCopy} className="p-1.5 hover:bg-gray-100 rounded-lg border">
+             <button 
+               onClick={handleCopy} 
+               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+             >
                 {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
              </button>
           </div>
         </div>
 
         {/* ─── CHAPTERS TAB ─── */}
-        <TabsContent value="chapters" className="mt-0 outline-none space-y-12">
+        <TabsContent value="chapters" className="mt-0 outline-none space-y-8">
           {timestamps?.map((ts, i) => (
             <motion.div 
               key={i}
@@ -238,18 +213,18 @@ const SummaryDisplay = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               className={cn(
-                "group cursor-pointer p-4 -mx-4 rounded-3xl transition-all",
-                i === activeChapterIndex ? "bg-green-50/50 border-l-4 border-green-500 shadow-sm" : "border-l-4 border-transparent"
+                "group cursor-pointer p-4 -mx-4 rounded-2xl transition-all",
+                i === activeChapterIndex ? "bg-gray-50" : "hover:bg-gray-50/50"
               )}
               onClick={() => onTimestampClick && onTimestampClick(parseTimeToSeconds(ts.time))}
             >
               <span className={cn(
-                "text-[11px] font-black mb-3 block transition-colors",
-                i === activeChapterIndex ? "text-green-600" : "text-muted-foreground group-hover:text-foreground"
+                "text-xs font-medium mb-2 block transition-colors",
+                i === activeChapterIndex ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
               )}>{ts.time}</span>
               <h3 className={cn(
-                "text-xl font-bold mb-3 uppercase tracking-tight transition-colors",
-                i === activeChapterIndex ? "text-green-700 font-black" : "group-hover:text-green-600"
+                "text-lg font-semibold mb-2 transition-colors",
+                i === activeChapterIndex ? "text-foreground" : "group-hover:text-foreground"
               )}>{ts.label}</h3>
               <p className="text-muted-foreground leading-relaxed text-sm">
                 {keyPoints[i] || overview.slice(0, 200)}

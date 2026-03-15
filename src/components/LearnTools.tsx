@@ -1,18 +1,17 @@
 import { 
-  MessageCircle, 
-  Target, 
-  Rocket, 
-  Box, 
   Mic, 
+  Headphones,
+  Video,
   FileText,
-  Search,
-  Sparkles,
-  Zap,
-  Layout,
-  Map,
+  HelpCircle,
   Layers,
-  Clock,
-  ChevronDown,
+  StickyNote,
+  GraduationCap,
+  Settings2,
+  X,
+  Plus,
+  Filter,
+  MoreVertical,
   Send
 } from "lucide-react";
 import { useState } from "react";
@@ -20,24 +19,20 @@ import { Button } from "./ui/button";
 
 interface LearnToolsProps {
   onToolClick?: (toolId: string, value?: string) => void;
+  sets?: { id: string; name: string; date: string }[];
 }
 
-const LearnTools = ({ onToolClick }: LearnToolsProps) => {
+const LearnTools = ({ onToolClick, sets = [] }: LearnToolsProps) => {
   const [question, setQuestion] = useState("");
 
   const tools = [
-    { id: 'podcast', name: 'Podcast Mode', icon: <MessageCircle className="h-4 w-4" />, desc: 'Convert to audio dialog', badge: 'AI' },
-    { id: 'quiz', name: 'Interactive Quiz', icon: <Target className="h-4 w-4" />, desc: 'Test your knowledge', active: true },
-    { id: 'roadmap', name: 'Mastery Roadmap', icon: <Rocket className="h-4 w-4" />, desc: 'Step-by-step guide' },
-    { id: 'mindmap', name: 'Mind Map', icon: <Map className="h-4 w-4" />, desc: 'Visual connections' },
-    { id: 'flashcards', name: 'Smart Flashcards', icon: <Layers className="h-4 w-4" />, desc: 'Memory practice' },
-    { id: 'deepdive', name: 'Deep Dive', icon: <Sparkles className="h-4 w-4" />, desc: 'Advanced analysis' },
-  ];
-
-  const suggestedActivities = [
-    { name: 'Explain like I\'m 5', icon: <Zap className="h-3 w-3" /> },
-    { name: 'Critical Review', icon: <FileText className="h-3 w-3" /> },
-    { name: 'Practical Exercise', icon: <Layout className="h-3 w-3" /> },
+    { id: 'podcast', name: 'Podcast', icon: <Headphones className="h-5 w-5" /> },
+    { id: 'deepdive', name: 'Video', icon: <Video className="h-5 w-5" /> },
+    { id: 'roadmap', name: 'Summary', icon: <FileText className="h-5 w-5" /> },
+    { id: 'quiz', name: 'Quiz', icon: <HelpCircle className="h-5 w-5" /> },
+    { id: 'flashcards', name: 'Flashcards', icon: <Layers className="h-5 w-5" /> },
+    { id: 'ask', name: 'Notes', icon: <StickyNote className="h-5 w-5" /> },
+    { id: 'mindmap', name: 'Lesson Plan', icon: <GraduationCap className="h-5 w-5" />, badge: 'New' },
   ];
 
   const handleAsk = () => {
@@ -48,74 +43,114 @@ const LearnTools = ({ onToolClick }: LearnToolsProps) => {
   };
 
   return (
-    <aside className="w-80 border-l bg-gray-50/30 h-screen flex flex-col p-6 overflow-y-auto scrollbar-none">
-      <div className="mb-8">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-6">Learning Tools</h3>
-        <div className="grid grid-cols-1 gap-3">
+    <aside className="w-[340px] border-l bg-white h-screen flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full" />
+          <span className="text-sm font-semibold text-foreground">Learn Tab</span>
+          <button className="p-0.5 hover:bg-gray-100 rounded transition-colors">
+            <X className="h-3.5 w-3.5 text-gray-400" />
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="p-1 hover:bg-gray-100 rounded transition-colors">
+            <Plus className="h-4 w-4 text-gray-400" />
+          </button>
+          <button className="p-1 hover:bg-gray-100 rounded transition-colors">
+            <svg className="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Generate Section */}
+      <div className="flex-1 overflow-y-auto px-5 py-5 scrollbar-none">
+        <h3 className="text-xs font-semibold text-muted-foreground mb-4">Generate</h3>
+        <div className="grid grid-cols-2 gap-3">
           {tools.map((tool) => (
             <button
               key={tool.id}
               onClick={() => onToolClick?.(tool.id)}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-100 hover:border-gray-300 transition-all text-left shadow-sm hover:shadow-md group"
+              className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50/80 border border-gray-100 hover:bg-gray-100/80 hover:border-gray-200 transition-all text-left group"
             >
-              <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-900 group-hover:bg-white transition-colors border border-gray-50">
-                {tool.icon}
+              <div className="flex items-center gap-2.5">
+                <span className="text-gray-600 group-hover:text-gray-900 transition-colors">
+                  {tool.icon}
+                </span>
+                <span className="text-sm font-medium text-foreground">{tool.name}</span>
+                {tool.badge && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">{tool.badge}</span>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                 <div className="flex items-center justify-between mb-0.5">
-                   <p className="text-sm font-bold text-foreground">{tool.name}</p>
-                   {tool.badge && (
-                      <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">{tool.badge}</span>
-                   )}
-                 </div>
-                 <p className="text-[10px] text-muted-foreground font-medium">{tool.desc}</p>
-              </div>
+              <Settings2 className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-500 transition-colors" />
             </button>
           ))}
         </div>
+
+        {/* My Sets Section */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-semibold text-muted-foreground">My Sets</h3>
+            <div className="flex items-center gap-2">
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors">
+                <Filter className="h-3.5 w-3.5 text-gray-400" />
+              </button>
+              <span className="text-xs text-muted-foreground">{sets.length}</span>
+            </div>
+          </div>
+          {sets.length > 0 ? (
+            <div className="space-y-2">
+              {sets.map((set) => (
+                <div key={set.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50/80 border border-gray-100 hover:bg-gray-100/80 transition-all group">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{set.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{set.date}</p>
+                    </div>
+                  </div>
+                  <button className="p-1 opacity-0 group-hover:opacity-100 hover:bg-gray-200 rounded transition-all">
+                    <MoreVertical className="h-3.5 w-3.5 text-gray-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <p className="text-xs text-muted-foreground">No sets yet</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="mb-8">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Suggested Actions</h3>
-        <div className="flex flex-wrap gap-2">
-          {suggestedActivities.map((act, i) => (
-            <button 
-              key={i} 
-              onClick={() => onToolClick?.("action", act.name)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-100 rounded-xl text-[10px] font-bold hover:border-gray-300 transition-all shadow-sm"
-            >
-              {act.icon}
-              {act.name}
+      {/* Ask Anything Input */}
+      <div className="px-5 py-4 border-t border-gray-100">
+        <div className="relative">
+          <input 
+            type="text" 
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyUp={(e) => e.key === "Enter" && handleAsk()}
+            placeholder="Ask anything" 
+            className="w-full h-11 pl-4 pr-20 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-300 focus:ring-1 focus:ring-gray-200 text-sm transition-all placeholder:text-gray-400"
+          />
+          <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+            {question.trim() ? (
+              <Button 
+                onClick={handleAsk}
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors">
+              <Mic className="h-3 w-3" />
+              Voice
             </button>
-          ))}
+          </div>
         </div>
-      </div>
-
-      <div className="mt-auto">
-        <div className="relative group">
-           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-             <Mic className="h-4 w-4 text-gray-400" />
-           </div>
-           <input 
-             type="text" 
-             value={question}
-             onChange={(e) => setQuestion(e.target.value)}
-             onKeyUp={(e) => e.key === "Enter" && handleAsk()}
-             placeholder="Ask anything about the video..." 
-             className="w-full h-12 pl-12 pr-12 rounded-2xl border border-gray-100 bg-white shadow-sm focus:outline-none focus:border-gray-300 text-sm font-medium transition-all"
-           />
-           <div className="absolute inset-y-0 right-3 flex items-center">
-             <Button 
-               onClick={handleAsk}
-               variant="ghost" 
-               size="icon" 
-               className="h-8 w-8 rounded-xl text-gray-400 hover:text-gray-900 transition-colors"
-             >
-               <Send className="h-4 w-4" />
-             </Button>
-           </div>
-        </div>
-        <p className="text-center text-[9px] text-gray-400 mt-3 font-semibold uppercase tracking-wider">Powered by YouLearn AI</p>
       </div>
     </aside>
   );
