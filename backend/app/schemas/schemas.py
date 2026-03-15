@@ -18,6 +18,12 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class CreditBalanceResponse(BaseModel):
+    balance: int
+    total_earned: int
+    total_spent: int
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: str
@@ -26,6 +32,7 @@ class UserResponse(BaseModel):
     auth_provider: str
     is_active: bool
     created_at: datetime
+    credits: Optional[CreditBalanceResponse] = None
 
     model_config = {"from_attributes": True}
 
@@ -60,6 +67,7 @@ class VideoAnalyzeRequest(BaseModel):
     expertise: str = Field(default="intermediate", pattern="^(beginner|intermediate|expert)$")
     style: str = Field(default="detailed", max_length=100)
     language: str = Field(default="English", max_length=50)
+    full_analysis: bool = Field(default=False)
 
 
 class VideoResponse(BaseModel):
@@ -75,6 +83,7 @@ class VideoResponse(BaseModel):
     like_count: Optional[int] = None
     status: str
     progress_percentage: int = 0
+    estimated_remaining_seconds: Optional[int] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -111,9 +120,12 @@ class AnalysisResponse(BaseModel):
     flashcards: Optional[list] = None
     learning_context: Optional[dict] = None
     tags: Optional[list] = None
+    transcript_segments: Optional[list] = None
     is_multi_video: bool = False
     status: str
     progress_percentage: int = 0
+    estimated_remaining_seconds: Optional[int] = None
+    full_analysis: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -123,6 +135,7 @@ class AnalysisDetailResponse(BaseModel):
     analysis: AnalysisResponse
     video: VideoResponse
     transcript_text: Optional[str] = None
+    transcript_segments: Optional[list] = None
 
 
 # ──────────────────────────────────────────────
@@ -182,10 +195,7 @@ class SpaceAddVideoRequest(BaseModel):
 # CREDITS
 # ──────────────────────────────────────────────
 
-class CreditBalanceResponse(BaseModel):
-    balance: int
-    total_earned: int
-    total_spent: int
+# CREDITS Moved Up
 
 
 class CreditTransactionResponse(BaseModel):

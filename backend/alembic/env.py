@@ -3,6 +3,7 @@
 import asyncio
 from logging.config import fileConfig
 
+import os
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -13,6 +14,11 @@ from app.models.models import *  # noqa: F401,F403 — import all models for aut
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Override with environment variable if present
+db_url = os.getenv("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
 

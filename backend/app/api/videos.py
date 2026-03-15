@@ -77,6 +77,7 @@ async def analyze_videos(
         ai_model=settings.DEFAULT_AI_MODEL,
         is_multi_video=len(video_ids) > 1,
         related_video_ids=video_ids[1:] if len(video_ids) > 1 else None,
+        full_analysis=req.full_analysis,
         status="queued",
     )
     db.add(analysis)
@@ -91,6 +92,7 @@ async def analyze_videos(
         expertise=req.expertise,
         style=req.style,
         language=req.language,
+        full_analysis=req.full_analysis,
     )
 
     return MessageResponse(message=f"Analysis queued. ID: {analysis.id}")

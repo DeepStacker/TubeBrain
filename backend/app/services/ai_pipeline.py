@@ -208,6 +208,21 @@ Rules:
 - Mind map should have at least 8 nodes"""
 
 
+MINIMAL_SYSTEM_PROMPT_TEMPLATE = """You are a video analysis expert. 
+Create logical, descriptive chapter markers and a brief summary for the following transcript.
+Respond in {language}.
+
+Return ONLY valid JSON with this EXACT structure:
+{{
+  "overview": "A 2-3 sentence high-level summary of the video.",
+  "keyPoints": ["3-5 main bullet points"],
+  "timestamps": [
+    {{"time": "0:00", "label": "Introduction"}},
+    {{"time": "5:30", "label": "Deep Dive into Topic X"}}
+  ]
+}}"""
+
+
 async def synthesize_content(
     transcript_text: str,
     metadata: dict,
@@ -217,6 +232,7 @@ async def synthesize_content(
     is_multi_video: bool = False,
     provider: str = None,
     model: str = None,
+    minimal_mode: bool = False,
 ) -> dict:
     """Generate structured learning content from a transcript using AI."""
     provider = provider or settings.DEFAULT_AI_PROVIDER
@@ -229,12 +245,20 @@ async def synthesize_content(
             "comparing and combining their insights."
         )
 
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        multi_video_instruction=multi_instruction,
-        expertise=expertise,
-        language=language,
-        style=style,
-    )
+    if minimal_mode:
+        system_prompt = MINIMAL_SYSTEM_PROMPT_TEMPLATE.format(
+            language=language
+        )
+        # For minimal mode, we should still handle foreign languages by translating to the requested language
+        if language.lower() == "english":
+            system_prompt += "\nIf the transcript is not in English, translate the summary and chapters into English."
+    else:
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+            multi_video_instruction=multi_instruction,
+            expertise=expertise,
+            language=language,
+            style=style,
+        )
 
     # Truncate transcript to fit context window
     max_transcript_tokens = 12000
@@ -249,7 +273,41 @@ async def synthesize_content(
         {"role": "user", "content": user_content},
     ]
 
-    content = await _call_ai(provider, model, messages)
+    # Dynamically build fallback chain based on available keys
+    fallback_chain = []
+    
+    # 1. Primary (requested)
+    fallback_chain.append((provider, model))
+    
+    # 2. Cerebras (if not primary)
+    if settings.CEREBRAS_API_KEY and provider != "cerebras":
+        fallback_chain.append(("cerebras", "llama3.1-70b"))
+    
+    # 3. xAI (if not primary)
+    if settings.XAI_API_KEY and provider != "xai":
+        fallback_chain.append(("xai", "grok-2-latest"))
+        
+    # 4. OpenRouter (if not primary)
+    if settings.OPENROUTER_API_KEY and provider != "openrouter":
+        fallback_chain.append(("openrouter", "google/gemini-2.0-flash-001"))
+
+    content = None
+    last_error = None
+
+    for p, m in fallback_chain:
+        try:
+            logger.info(f"Attempting synthesis with {p} ({m})...")
+            content = await _call_ai(p, m, messages)
+            if content:
+                logger.info(f"Synthesis successful with {p}")
+                break
+        except Exception as e:
+            logger.warning(f"AI provider {p} failed: {e}")
+            last_error = e
+            continue
+
+    if not content:
+        raise AIError(f"All available AI providers failed. Last error: {last_error}")
 
     if not content:
         raise AIError("AI provider returned empty response")
@@ -304,9 +362,12 @@ async def _call_ai(provider: str, model: str, messages: list[dict]) -> str:
     url = url_map.get(provider, url_map["groq"])
     api_key = key_map.get(provider, settings.GROQ_API_KEY)
 
-    # For OpenRouter, use the AI_MODEL env var if available
-    if provider == "openrouter" and settings.AI_MODEL:
+    # For OpenRouter, use the AI_MODEL env var if available AND no model was passed
+    if provider == "openrouter" and not model and settings.AI_MODEL:
         model = settings.AI_MODEL
+    
+    # Ensure we have a model name
+    model = model or settings.DEFAULT_AI_MODEL
 
     headers = {
         "Authorization": f"Bearer {api_key}",

@@ -38,6 +38,10 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/youtube_genius
+      - REDIS_URL=redis://redis:6379/0
+      - OAUTH_REDIRECT_BASE=http://localhost:8000
     ports:
       - "8000:8000"
     depends_on:
@@ -56,6 +60,9 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/youtube_genius
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,20 +72,19 @@ services:
       - ./backend:/app
     command: arq app.workers.tasks.WorkerSettings
 
-  # ── Next.js Frontend ──
+  # ── Vite Frontend ──
   frontend:
     build:
-      context: ./frontend
+      context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "8080:8080"
     depends_on:
       - backend
     volumes:
-      - ./frontend:/app
+      - .:/app
       - /app/node_modules
-      - /app/.next
-    command: npm run dev
+    command: npm run dev -- --host 0.0.0.0
 
 volumes:
   pgdata:

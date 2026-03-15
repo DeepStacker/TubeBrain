@@ -115,6 +115,7 @@ const Index = () => {
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
+  const [estimatedRemaining, setEstimatedRemaining] = useState<number | null>(null);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -344,6 +345,7 @@ const Index = () => {
         body: JSON.stringify({
           urls: ids.map(id => `https://youtube.com/watch?v=${id}`),
           expertise: expertLevel.toLowerCase(),
+          full_analysis: options.full_analysis ?? false,
           ...options
         }),
       });
@@ -404,7 +406,7 @@ const Index = () => {
     let data = null;
     let attempts = 0;
     
-    while (!completed && attempts < 60) {
+    while (!completed && attempts < 600) {
       attempts++;
       await new Promise(r => setTimeout(r, 2000));
       try {
@@ -415,6 +417,9 @@ const Index = () => {
         // Update progress state
         if (statusData.progress_percentage !== undefined) {
           setAnalysisProgress(statusData.progress_percentage);
+        }
+        if (statusData.estimated_remaining_seconds !== undefined) {
+          setEstimatedRemaining(statusData.estimated_remaining_seconds);
         }
 
         if (statusData.status === "completed") {
@@ -431,7 +436,7 @@ const Index = () => {
     }
 
     if (data) {
-      const { analysis, video, transcript_text } = data;
+      const { analysis, video, transcript_text, transcript_segments } = data;
       
       const vData: VideoData = {
         title: video.title || "Video Analysis",
@@ -454,7 +459,8 @@ const Index = () => {
         quiz: analysis.quiz,
         roadmap: analysis.roadmap,
         mind_map: analysis.mind_map,
-        flashcards: analysis.flashcards
+        flashcards: analysis.flashcards,
+        transcript_segments: transcript_segments || analysis.transcript_segments
       };
 
       const mData: Metadata = {
@@ -900,7 +906,14 @@ const Index = () => {
                            </div>
                            <div className="text-right">
                              <p className="text-[10px] font-black uppercase tracking-widest text-gray-300 mb-1">Overall Progress</p>
-                             <span className="text-5xl font-black italic tracking-tightest leading-none text-black">{analysisProgress}%</span>
+                             <div className="flex flex-col items-end">
+                               <span className="text-5xl font-black italic tracking-tightest leading-none text-black">{analysisProgress}%</span>
+                               {estimatedRemaining !== null && estimatedRemaining > 0 && (
+                                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-500 mt-2">
+                                   Est. Remaining: {Math.floor(estimatedRemaining / 60)}:{String(estimatedRemaining % 60).padStart(2, '0')}
+                                 </span>
+                               )}
+                             </div>
                            </div>
                         </div>
                         
@@ -930,6 +943,7 @@ const Index = () => {
                     <SummaryDisplay 
                       {...summaryData}
                       transcript={transcript}
+                      transcript_segments={summaryData.transcript_segments}
                       onTimestampClick={handleTimestampClick}
                       spaces={spaces}
                       onAddToSpace={handleAddToSpace}

@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+import httpx
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -43,50 +44,390 @@ class TranscriptEngine:
     @classmethod
     def _get_whisper_model(cls):
         if cls._whisper_model is None:
-            import whisper
-            logger.info("Loading Whisper 'base' model into memory...")
-            cls._whisper_model = whisper.load_model("base")
+            try:
+                from faster_whisper import WhisperModel
+                logger.info("Loading Faster-Whisper 'base' model (int8)...")
+                cls._whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+            except ImportError:
+                import whisper
+                logger.info("Faster-Whisper not found. Falling back to standard Whisper 'base' model...")
+                cls._whisper_model = whisper.load_model("base")
         return cls._whisper_model
+
+    MIN_WORD_COUNT = 50  # Quality gate: reject transcripts shorter than this
 
     async def extract(self, video_id: str) -> TranscriptResult:
         """Main entry: attempt all stages in order until one succeeds."""
         url = f"https://www.youtube.com/watch?v={video_id}"
 
-        # Stage 1: Manual captions via yt-dlp
-        logger.info(f"[{video_id}] Stage 1: Trying manual captions...")
+        # Stage 1: youtube-transcript-api
+        print(f"DEBUG [{video_id}]: Stage 1 start...", flush=True)
+        result = await self._try_transcript_api(video_id)
+        if result and result.word_count >= self.MIN_WORD_COUNT and not self._is_repetitive(result.segments):
+            result.source = "youtube_transcript_api"
+            print(f"DEBUG [{video_id}]: Stage 1 success.", flush=True)
+            return result
+
+        # Stage 2: Manual captions
+        print(f"DEBUG [{video_id}]: Stage 2 start...", flush=True)
         result = await self._try_ytdlp_captions(url, auto=False)
-        if result:
+        if result and result.word_count >= self.MIN_WORD_COUNT and not self._is_repetitive(result.segments):
             result.source = "manual_captions"
-            logger.info(f"[{video_id}] ✓ Manual captions extracted ({result.word_count} words)")
+            print(f"DEBUG [{video_id}]: Stage 2 success.", flush=True)
             return result
 
-        # Stage 2: Auto-generated captions via yt-dlp
-        logger.info(f"[{video_id}] Stage 2: Trying auto captions...")
+        # Stage 3: Auto-generated captions
+        print(f"DEBUG [{video_id}]: Stage 3 start...", flush=True)
         result = await self._try_ytdlp_captions(url, auto=True)
-        if result:
+        if result and result.word_count >= self.MIN_WORD_COUNT and not self._is_repetitive(result.segments):
             result.source = "auto_captions"
-            logger.info(f"[{video_id}] ✓ Auto captions extracted ({result.word_count} words)")
+            print(f"DEBUG [{video_id}]: Stage 3 success.", flush=True)
             return result
 
-        # Stage 2.5: Jina Reader API (web crawling fallback)
-        logger.info(f"[{video_id}] Stage 2.5: Trying Jina Reader API...")
-        result = await self._try_jina_reader(url, video_id)
-        if result:
-            result.source = "jina_reader"
-            logger.info(f"[{video_id}] ✓ Jina Reader extracted ({result.word_count} words)")
+        # Stage 4: Groq Cloud Whisper (Fast, zero CPU)
+        print(f"DEBUG [{video_id}]: Stage 4 start (Groq Cloud)...", flush=True)
+        result = await self._try_groq_whisper(url, video_id)
+        if result and result.word_count >= self.MIN_WORD_COUNT:
+            result.source = "groq_whisper"
+            print(f"DEBUG [{video_id}]: Stage 4 success.", flush=True)
             return result
 
-        # Stage 3: Download audio → Whisper transcription
-        logger.info(f"[{video_id}] Stage 3: Downloading audio for Whisper...")
+        # Stage 5: Gemini Cloud (Fast, zero CPU)
+        print(f"DEBUG [{video_id}]: Stage 5 start (Gemini Cloud)...", flush=True)
+        result = await self._try_gemini_whisper(url, video_id)
+        if result and result.word_count >= self.MIN_WORD_COUNT:
+            result.source = "gemini_cloud"
+            print(f"DEBUG [{video_id}]: Stage 5 success.", flush=True)
+            return result
+
+        # Stage 6: Local Whisper (Slow fallback)
+        print(f"DEBUG [{video_id}]: Stage 6 start (Local Whisper)...", flush=True)
         result = await self._try_whisper(url, video_id)
-        if result:
-            result.source = "whisper"
-            logger.info(f"[{video_id}] ✓ Whisper transcription complete ({result.word_count} words)")
+        if result and result.word_count >= self.MIN_WORD_COUNT:
+            result.source = "local_whisper"
+            print(f"DEBUG [{video_id}]: Stage 6 success.", flush=True)
             return result
 
         # All stages failed
         logger.error(f"[{video_id}] ✗ All transcript extraction stages failed")
         raise TranscriptError(f"Could not extract transcript for video {video_id}")
+
+    async def _try_transcript_api(self, video_id: str) -> Optional[TranscriptResult]:
+        """Use youtube-transcript-api to fetch official YouTube transcripts."""
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            import asyncio
+
+            # Run the synchronous API in a thread pool
+            def _fetch():
+                api = YouTubeTranscriptApi()
+                try:
+                    transcript_list = api.list(video_id)
+                except Exception as e:
+                    logger.warning(f"Could not list transcripts for {video_id}: {e}")
+                    return None
+                
+                try:
+                    # Try manual English first
+                    transcript = transcript_list.find_manually_created_transcript(["en", "en-US", "en-GB"])
+                except:
+                    try:
+                        # Try generated English
+                        transcript = transcript_list.find_generated_transcript(["en", "en-US", "en-GB"])
+                    except:
+                        # Try any manual transcript and translate
+                        for t in transcript_list:
+                            if not t.is_generated:
+                                try:
+                                    return t.translate("en").fetch()
+                                except:
+                                    continue
+                        
+                        # Try any generated and translate
+                        for t in transcript_list:
+                            try:
+                                return t.translate("en").fetch()
+                            except:
+                                continue
+                        return None
+                return transcript.fetch()
+
+            data = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+            if not data:
+                return None
+
+            segments = []
+            for entry in data:
+                segments.append(TranscriptSegment(
+                    start=float(entry["start"]),
+                    end=float(entry["start"] + entry["duration"]),
+                    text=entry["text"].strip(),
+                ))
+
+            full_text = self._segments_to_timestamped_text(segments)
+            word_count = len(full_text.split())
+
+            return TranscriptResult(
+                full_text=full_text,
+                segments=segments,
+                language="en",
+                word_count=word_count,
+            )
+        except Exception as e:
+            logger.warning(f"youtube-transcript-api failed: {e}")
+            return None
+
+    async def _try_groq_whisper(self, url: str, video_id: str) -> Optional[TranscriptResult]:
+        """Download audio and transcribe with Groq Cloud Whisper API."""
+        try:
+            from app.config import get_settings
+            settings = get_settings()
+            if not settings.GROQ_API_KEY:
+                logger.warning("GROQ_API_KEY not configured, skipping cloud transcription")
+                return None
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                audio_path = os.path.join(tmpdir, f"{video_id}.m4a")
+
+                # Download audio only (m4a is usually better for cloud APIs than low-quality mp3)
+                cmd = [
+                    "yt-dlp",
+                    "-f", "ba[ext=m4a]/ba",  # Prefer m4a
+                    "-x",
+                    "--audio-format", "m4a",
+                    "-o", audio_path,
+                    "--no-warnings",
+                    "--quiet",
+                    url,
+                ]
+
+                proc = await _run_subprocess(cmd, timeout=300)
+                if proc.returncode != 0:
+                    logger.warning(f"yt-dlp failed for Groq stage with code {proc.returncode}")
+                    return None
+
+                # Find the actual audio file
+                actual_audio = None
+                for f in os.listdir(tmpdir):
+                    if f.endswith((".m4a", ".mp3", ".wav", ".opus", ".webm")):
+                        actual_audio = os.path.join(tmpdir, f)
+                        break
+
+                if not actual_audio:
+                    logger.warning("No audio file found after yt-dlp")
+                    return None
+                
+                # Compress audio with ffmpeg to stay under Groq's 25MB limit
+                # 16khz, mono, 32k bitrate is plenty for Whisper and very small
+                compressed_audio = os.path.join(tmpdir, f"{video_id}_comp.mp3")
+                ffmpeg_cmd = [
+                    "ffmpeg",
+                    "-i", actual_audio,
+                    "-ar", "16000",
+                    "-ac", "1",
+                    "-map", "a",
+                    "-b:a", "32k",
+                    "-y",
+                    compressed_audio
+                ]
+                
+                # Compress audio with ffmpeg to stay under Groq's 25MB limit
+                # v3-turbo is faster and supports multilingual
+                compressed_audio = os.path.join(tmpdir, f"{video_id}_comp.mp3")
+                ffmpeg_cmd = [
+                    "ffmpeg",
+                    "-i", actual_audio,
+                    "-ar", "22050", # Standard sample rate
+                    "-ac", "1",
+                    "-b:a", "64k", # Standard bitrate
+                    "-y",
+                    compressed_audio
+                ]
+                
+                f_proc = await _run_subprocess(ffmpeg_cmd, timeout=300)
+                if f_proc.returncode == 0 and os.path.exists(compressed_audio):
+                    actual_audio = compressed_audio
+                    print(f"DEBUG [{video_id}]: ffmpeg compression successful.", flush=True)
+                else:
+                    print(f"DEBUG [{video_id}]: ffmpeg compression failed (code {f_proc.returncode})", flush=True)
+
+                size_mb = os.path.getsize(actual_audio) / (1024 * 1024)
+                print(f"DEBUG [{video_id}]: Uploading {os.path.basename(actual_audio)} to Groq ({size_mb:.2f} MB)", flush=True)
+
+                if size_mb > 25:
+                    print(f"DEBUG [{video_id}]: File too large for Groq ({size_mb:.2f} MB), falling back", flush=True)
+                    return None
+
+                # Call Groq API using official SDK
+                try:
+                    from groq import Groq
+                    client = Groq(api_key=settings.GROQ_API_KEY)
+                    with open(actual_audio, "rb") as f:
+                        transcription = client.audio.transcriptions.create(
+                            file=(os.path.basename(actual_audio), f.read()),
+                            model="whisper-large-v3-turbo",
+                            response_format="verbose_json",
+                        )
+                        
+                        # The transcription object has a .text and potentially .segments if response_format is verbose_json
+                        # Note: The Groq SDK returns an object, not just a dict
+                        result_data = transcription.model_dump()
+                        full_text = result_data.get("text", "")
+                        segments_data = result_data.get("segments", [])
+                        
+                        segments = []
+                        for s in segments_data:
+                            segments.append(TranscriptSegment(
+                                start=float(s.get("start", 0)),
+                                end=float(s.get("end", 0)),
+                                text=s.get("text", "").strip(),
+                            ))
+
+                        if not segments and full_text:
+                            segments = [TranscriptSegment(start=0, end=0, text=full_text)]
+
+                        return TranscriptResult(
+                            full_text=self._segments_to_timestamped_text(segments),
+                            segments=segments,
+                            language=result_data.get("language", "en"),
+                            word_count=len(full_text.split()),
+                        )
+                except Exception as sdk_err:
+                    print(f"DEBUG [{video_id}]: Groq SDK error: {sdk_err}", flush=True)
+                    return None
+
+        except Exception as e:
+            logger.warning(f"Groq Cloud transcription failed: {e}")
+            return None
+
+    async def _try_gemini_whisper(self, url: str, video_id: str) -> Optional[TranscriptResult]:
+        """Download audio and transcribe with Google AI Gemini 1.5 Flash."""
+        try:
+            from app.config import get_settings
+            settings = get_settings()
+            if not settings.GOOGLE_AI_KEY:
+                logger.warning("GOOGLE_AI_KEY not configured, skipping Gemini stage")
+                return None
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
+
+                # Download audio
+                cmd = [
+                    "yt-dlp",
+                    "-x",
+                    "--audio-format", "mp3",
+                    "--audio-quality", "9",
+                    "-o", audio_path,
+                    "--no-warnings",
+                    "--quiet",
+                    url,
+                ]
+
+                proc = await _run_subprocess(cmd, timeout=300)
+                if proc.returncode != 0:
+                    return None
+
+                actual_audio = None
+                for f in os.listdir(tmpdir):
+                    if f.endswith((".mp3", ".m4a", ".wav", ".opus", ".webm")):
+                        actual_audio = os.path.join(tmpdir, f)
+                        break
+
+                if not actual_audio:
+                    return None
+
+                async with httpx.AsyncClient() as client:
+                    # 1. Upload to Files API
+                    upload_url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?key={settings.GOOGLE_AI_KEY}"
+                    with open(actual_audio, "rb") as f:
+                        resp = await client.post(
+                            upload_url,
+                            headers={
+                                "X-Goog-Upload-Protocol": "multipart",
+                            },
+                            files={"file": (os.path.basename(actual_audio), f, "audio/mpeg")},
+                            timeout=120.0,
+                        )
+
+                    if resp.status_code != 200:
+                        print(f"DEBUG [{video_id}]: Gemini Upload failed: {resp.status_code} - {resp.text}", flush=True)
+                        return None
+
+                    file_data = resp.json()
+                    file_uri = file_data.get("file", {}).get("uri")
+                    if not file_uri:
+                        return None
+
+                    # 2. Generate content with structured output
+                    gen_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GOOGLE_AI_KEY}"
+                    body = {
+                        "contents": [{
+                            "parts": [
+                                {"file_data": {"file_uri": file_uri, "mime_type": "audio/mpeg"}},
+                                {"text": "Transcribe this audio file. Return the transcription as a list of objects with 'start' (seconds as float), 'end' (seconds as float), and 'text' fields. Provide accurate timestamps for every sentence."}
+                            ]
+                        }],
+                        "generationConfig": {
+                            "response_mime_type": "application/json",
+                            "response_schema": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "transcription": {
+                                        "type": "ARRAY",
+                                        "items": {
+                                            "type": "OBJECT",
+                                            "properties": {
+                                                "start": {"type": "NUMBER"},
+                                                "end": {"type": "NUMBER"},
+                                                "text": {"type": "STRING"}
+                                            },
+                                            "required": ["start", "end", "text"]
+                                        }
+                                    }
+                                },
+                                "required": ["transcription"]
+                            }
+                        }
+                    }
+
+                    resp = await client.post(gen_url, json=body, timeout=120.0)
+                    if resp.status_code != 200:
+                        print(f"DEBUG [{video_id}]: Gemini GenerateContent failed: {resp.status_code} - {resp.text}", flush=True)
+                        return None
+
+                    result_data = resp.json()
+                    candidates = result_data.get("candidates", [])
+                    if not candidates:
+                        return None
+
+                    content_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "{}")
+                    try:
+                        transcription_json = json.loads(content_text)
+                        segments_data = transcription_json.get("transcription", [])
+                        
+                        segments = []
+                        for s in segments_data:
+                            segments.append(TranscriptSegment(
+                                start=float(s.get("start", 0)),
+                                end=float(s.get("end", 0)),
+                                text=s.get("text", "").strip(),
+                            ))
+
+                        full_text = self._segments_to_timestamped_text(segments)
+                        return TranscriptResult(
+                            full_text=full_text,
+                            segments=segments,
+                            language="en",
+                            word_count=len(full_text.split()),
+                        )
+                    except Exception as e:
+                        print(f"DEBUG [{video_id}]: Gemini JSON parse failed: {e}", flush=True)
+                        return None
+
+        except Exception as e:
+            logger.warning(f"Gemini Cloud transcription failed: {e}")
+            return None
 
     async def _try_ytdlp_captions(self, url: str, auto: bool = False) -> Optional[TranscriptResult]:
         """Extract captions using yt-dlp subtitle download."""
@@ -97,7 +438,7 @@ class TranscriptEngine:
                 cmd = [
                     "yt-dlp",
                     "--skip-download",
-                    "--sub-lang", "en,en-US,en-GB,en-orig",
+                    "--sub-lang", "en,en-US,en-GB,hi,hi-Latn,en-orig,.*",  # Search everything, prefer English/Hindi
                     "--sub-format", "json3/srv3/vtt/srt/best",
                     "-o", output_template,
                     "--no-warnings",
@@ -190,36 +531,51 @@ class TranscriptEngine:
             return None
 
     async def _transcribe_with_whisper(self, audio_path: str) -> Optional[TranscriptResult]:
-        """Run OpenAI Whisper on audio file."""
+        """Run Whisper on audio file."""
         try:
+            import asyncio
             model = self._get_whisper_model()
-            result = model.transcribe(
-                audio_path,
-                verbose=False,
-                word_timestamps=False,
-            )
+            
+            # Check if it's faster-whisper or standard whisper
+            is_faster_whisper = getattr(model.__class__, "__module__", "").startswith("faster_whisper")
+            
+            if is_faster_whisper:
+                # model.transcribe is a generator/iterator in faster-whisper
+                # we need to run the iteration in a thread
+                def _run_faster_whisper():
+                    segments_iter, info = model.transcribe(audio_path, beam_size=2)
+                    return list(segments_iter), info
 
-            segments = []
-            for seg in result.get("segments", []):
-                segments.append(TranscriptSegment(
-                    start=seg["start"],
-                    end=seg["end"],
-                    text=seg["text"].strip(),
-                ))
+                segments, info = await asyncio.to_thread(_run_faster_whisper)
+                
+                results = []
+                for s in segments:
+                    results.append(TranscriptSegment(
+                        start=s.start,
+                        end=s.end,
+                        text=s.text.strip(),
+                    ))
+                
+                language = info.language
+            else: # standard whisper
+                # result = model.transcribe(audio_path, verbose=False)
+                result = await asyncio.to_thread(model.transcribe, audio_path, verbose=False)
+                results = []
+                for seg in result.get("segments", []):
+                    results.append(TranscriptSegment(
+                        start=seg["start"],
+                        end=seg["end"],
+                        text=seg["text"].strip(),
+                    ))
+                language = result.get("language", "en")
 
-            full_text = self._segments_to_timestamped_text(segments)
-            word_count = len(full_text.split())
-            language = result.get("language", "en")
-
+            full_text = self._segments_to_timestamped_text(results)
             return TranscriptResult(
                 full_text=full_text,
-                segments=segments,
+                segments=results,
                 language=language,
-                word_count=word_count,
+                word_count=len(full_text.split()),
             )
-        except ImportError:
-            logger.warning("openai-whisper not installed. Whisper stage skipped.")
-            return None
         except Exception as e:
             logger.error(f"Whisper transcription error: {e}")
             return None
@@ -309,75 +665,37 @@ class TranscriptEngine:
             lines.append(f"[{mins}:{secs:02d}] {seg.text}")
         return "\n".join(lines)
 
+    def _is_repetitive(self, segments: list[TranscriptSegment]) -> bool:
+        """Detect if the transcript is mostly repetitive boilerplate (hallucinations)."""
+        if not segments:
+            return False
+            
+        from collections import Counter
+        # Normalize text for counting
+        normalized = [s.text.strip().lower() for s in segments if s.text.strip()]
+        if not normalized:
+            return False
+            
+        counts = Counter(normalized)
+        if not counts:
+            return False
+            
+        most_common_text, count = counts.most_common(1)[0]
+        
+        # Thresholds:
+        # 1. If a single phrase takes up > 50% of a non-trivial transcript
+        # 2. If a single phrase repeats > 10 times in any transcript
+        total = len(normalized)
+        if total > 5 and (count / total) > 0.5:
+            logger.warning(f"Repetitive transcript detected: '{most_common_text}' repeated {count}/{total} times")
+            return True
+            
+        if count > 12: # Hard limit for any repetition
+            logger.warning(f"Highly repetitive phrase detected: '{most_common_text}' repeated {count} times")
+            return True
+            
+        return False
 
-    async def _try_jina_reader(self, url: str, video_id: str) -> Optional[TranscriptResult]:
-        """Use Jina Reader API to crawl the YouTube page and extract transcript."""
-        try:
-            from app.config import get_settings
-            import httpx
-
-            settings = get_settings()
-            if not settings.JINA_API_KEY:
-                logger.info(f"[{video_id}] Jina API key not configured, skipping")
-                return None
-
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"https://r.jina.ai/{url}",
-                    headers={
-                        "Authorization": f"Bearer {settings.JINA_API_KEY}",
-                        "X-Return-Format": "text",
-                        "Accept": "text/plain",
-                    },
-                    timeout=30.0,
-                )
-
-                if resp.status_code != 200:
-                    return None
-
-                page_text = resp.text
-
-                # Try to extract transcript-like content from the page
-                # Look for timestamped lines [MM:SS] or (MM:SS) patterns
-                lines = page_text.split("\n")
-                transcript_lines = []
-                for line in lines:
-                    line = line.strip()
-                    # Match lines with timestamps like 0:00, 1:23, 12:34
-                    if re.match(r"^\d+:\d{2}", line):
-                        transcript_lines.append(line)
-                    elif re.match(r"^\[\d+:\d{2}\]", line):
-                        transcript_lines.append(line)
-
-                if len(transcript_lines) < 5:
-                    # Not enough timestamped content, try extracting raw text
-                    # Filter out navigation/UI text, keep substantial paragraphs
-                    content_lines = [l for l in lines if len(l) > 50 and not l.startswith("#")]
-                    if len(content_lines) > 3:
-                        full_text = "\n".join(content_lines)
-                        word_count = len(full_text.split())
-                        if word_count > 100:
-                            return TranscriptResult(
-                                full_text=full_text,
-                                segments=[],
-                                language="en",
-                                word_count=word_count,
-                            )
-                    return None
-
-                full_text = "\n".join(transcript_lines)
-                word_count = len(full_text.split())
-
-                return TranscriptResult(
-                    full_text=full_text,
-                    segments=[],
-                    language="en",
-                    word_count=word_count,
-                )
-
-        except Exception as e:
-            logger.warning(f"Jina Reader extraction failed: {e}")
-            return None
 
 
 class TranscriptError(Exception):

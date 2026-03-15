@@ -35,6 +35,7 @@ export interface SummaryData {
   roadmap?: { title: string; steps: RoadmapStep[] };
   mind_map?: MindMapData;
   flashcards?: { front: string; back: string }[];
+  transcript_segments?: { start: number; end: number; text: string }[];
 }
 
 export interface Metadata {
@@ -108,7 +109,8 @@ export const fetchHistory = async (): Promise<HistoryItem[]> => {
           quiz: a.quiz,
           roadmap: a.roadmap,
           mind_map: a.mind_map,
-          flashcards: a.flashcards
+          flashcards: a.flashcards,
+          transcript_segments: a.transcript_segments
         },
         transcript: null,
         metadata: {

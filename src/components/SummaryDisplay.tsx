@@ -65,6 +65,7 @@ interface SummaryDisplayProps {
   onAddToSpace?: (spaceId: string) => void;
   currentTime?: number;
   flashcards?: { front: string; back: string }[];
+  transcript_segments?: { start: number; end: number; text: string }[];
 }
 
 function parseTimeToSeconds(timeStr: string): number {
@@ -89,7 +90,8 @@ const SummaryDisplay = ({
   spaces = [],
   onAddToSpace,
   currentTime = 0,
-  flashcards
+  flashcards,
+  transcript_segments
 }: SummaryDisplayProps) => {
   const [copied, setCopied] = useState(false);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
@@ -113,6 +115,17 @@ const SummaryDisplay = ({
   }, [currentTime, isAutoScroll]);
 
   const findActiveTranscriptIndex = () => {
+    if (transcript_segments) {
+      let activeIndex = -1;
+      for (let i = 0; i < transcript_segments.length; i++) {
+        if (transcript_segments[i].start <= currentTime) {
+          activeIndex = i;
+        } else {
+          break;
+        }
+      }
+      return activeIndex;
+    }
     if (!transcript) return -1;
     const lines = transcript.split("\n");
     let activeIndex = -1;
@@ -252,7 +265,37 @@ const SummaryDisplay = ({
 
         {/* ─── TRANSCRIPTS TAB ─── */}
         <TabsContent value="transcripts" className="mt-0 outline-none">
-          {transcript ? (
+          {transcript_segments ? (
+            <div className="space-y-4">
+              {transcript_segments.map((seg, i) => {
+                const isActive = i === activeTranscriptIndex;
+                const hh = Math.floor(seg.start / 3600);
+                const mm = Math.floor((seg.start % 3600) / 60);
+                const ss = Math.floor(seg.start % 60);
+                const timeStr = hh > 0 
+                  ? `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+                  : `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+
+                return (
+                  <div
+                    key={i}
+                    ref={isActive ? activeLineRef : null}
+                    onClick={() => onTimestampClick && onTimestampClick(seg.start)}
+                    className={cn(
+                      "group cursor-pointer p-3 -mx-3 rounded-2xl transition-all",
+                      isActive ? "bg-blue-50 text-blue-700 font-bold shadow-sm" : "hover:bg-gray-50"
+                    )}
+                  >
+                    <span className={cn(
+                      "text-[10px] font-black mb-1 block",
+                      isActive ? "text-blue-600" : "text-muted-foreground group-hover:text-foreground"
+                    )}>[{timeStr}]</span>
+                    <p className="text-sm leading-relaxed">{seg.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : transcript ? (
             <div className="space-y-4">
               {transcript.split("\n").map((line, i) => {
                 const match = line.match(/^\[(\d+:\d+)\]\s*(.*)$/);
@@ -265,12 +308,12 @@ const SummaryDisplay = ({
                       onClick={() => onTimestampClick && onTimestampClick(parseTimeToSeconds(match[1]))}
                       className={cn(
                         "group cursor-pointer p-3 -mx-3 rounded-2xl transition-all",
-                        isActive ? "bg-green-50 text-green-700 font-bold shadow-sm" : "hover:bg-gray-50"
+                        isActive ? "bg-blue-50 text-blue-700 font-bold shadow-sm" : "hover:bg-gray-50"
                       )}
                     >
                       <span className={cn(
                         "text-[10px] font-black mb-1 block",
-                        isActive ? "text-green-600" : "text-muted-foreground group-hover:text-foreground"
+                        isActive ? "text-blue-600" : "text-muted-foreground group-hover:text-foreground"
                       )}>{match[1]}</span>
                       <p className="text-sm leading-relaxed">{match[2]}</p>
                     </div>

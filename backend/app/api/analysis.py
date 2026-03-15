@@ -32,14 +32,15 @@ async def get_analysis(
     video_result = await db.execute(select(Video).where(Video.id == analysis.video_id))
     video = video_result.scalar_one_or_none()
 
-    # Get transcript text
     transcript_text = None
+    transcript_segments = None
     transcript_result = await db.execute(
         select(Transcript).where(Transcript.video_id == analysis.video_id)
     )
     transcript = transcript_result.scalar_one_or_none()
     if transcript:
         transcript_text = transcript.full_text
+        transcript_segments = transcript.timestamps_json
 
     # Map extra fields
     resp = AnalysisResponse.model_validate(analysis)
@@ -52,6 +53,7 @@ async def get_analysis(
         analysis=resp,
         video=video,
         transcript_text=transcript_text,
+        transcript_segments=transcript_segments,
     )
 
 
@@ -96,7 +98,12 @@ async def get_analysis_status(
 ):
     """Poll analysis status (for frontend progress tracking)."""
     result = await db.execute(
-        select(Analysis.status, Analysis.error_message).where(
+        select(
+            Analysis.status, 
+            Analysis.error_message,
+            Analysis.progress_percentage,
+            Analysis.estimated_remaining_seconds
+        ).where(
             Analysis.id == analysis_id, Analysis.user_id == user.id
         )
     )
@@ -104,7 +111,12 @@ async def get_analysis_status(
     if not row:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    return {"status": row.status, "error": row.error_message}
+    return {
+        "status": row.status, 
+        "error": row.error_message,
+        "progress_percentage": row.progress_percentage,
+        "estimated_remaining_seconds": row.estimated_remaining_seconds
+    }
 @router.delete("/{analysis_id}", response_model=MessageResponse)
 async def delete_analysis(
     analysis_id: UUID,
