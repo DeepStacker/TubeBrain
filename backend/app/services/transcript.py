@@ -657,13 +657,37 @@ class TranscriptEngine:
         return 0.0
 
     def _segments_to_timestamped_text(self, segments: list[TranscriptSegment]) -> str:
-        """Convert segments to timestamped text format: [MM:SS] text"""
-        lines = []
-        for seg in segments:
-            mins = int(seg.start // 60)
-            secs = int(seg.start % 60)
-            lines.append(f"[{mins}:{secs:02d}] {seg.text}")
-        return "\n".join(lines)
+        """
+        Convert segments to timestamped text format: [MM:SS] text.
+        Merges short segments into ~10 second blocks for better readability.
+        """
+        if not segments:
+            return ""
+
+        merged_lines = []
+        current_text = []
+        current_start = segments[0].start
+        
+        for i, seg in enumerate(segments):
+            current_text.append(seg.text)
+            
+            # Check if we should emit the line (every ~10s or if it's the last segment)
+            is_last = (i == len(segments) - 1)
+            duration = seg.end - current_start
+            
+            if duration >= 10.0 or is_last:
+                mins = int(current_start // 60)
+                secs = int(current_start % 60)
+                full_line = " ".join(current_text).strip()
+                if full_line:
+                    merged_lines.append(f"[{mins}:{secs:02d}] {full_line}")
+                
+                # Reset for next block
+                if not is_last:
+                    current_text = []
+                    current_start = segments[i+1].start if i+1 < len(segments) else seg.end
+                    
+        return "\n".join(merged_lines)
 
     def _is_repetitive(self, segments: list[TranscriptSegment]) -> bool:
         """Detect if the transcript is mostly repetitive boilerplate (hallucinations)."""

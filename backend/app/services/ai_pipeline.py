@@ -169,7 +169,12 @@ Return ONLY valid JSON (no markdown, no code blocks) with this EXACT structure:
   "overview": "3-5 paragraphs of detailed analysis",
   "keyPoints": ["10-15 detailed insight strings"],
   "takeaways": ["6-10 actionable takeaway strings"],
-  "timestamps": [{{"time": "0:00", "label": "Topic description"}}],
+  "timestamps": [
+    {{
+      "time": "0:00", 
+      "label": "Detailed, descriptive label (min 5 words) focusing on the key insight of this section"
+    }}
+  ],
   "roadmap": {{
     "title": "Mastery Roadmap",
     "steps": [{{"step": 1, "task": "Task name", "description": "Detailed description"}}]
@@ -217,8 +222,10 @@ Return ONLY valid JSON with this EXACT structure:
   "overview": "A 2-3 sentence high-level summary of the video.",
   "keyPoints": ["3-5 main bullet points"],
   "timestamps": [
-    {{"time": "0:00", "label": "Introduction"}},
-    {{"time": "5:30", "label": "Deep Dive into Topic X"}}
+    {{
+      "time": "0:00", 
+      "label": "Descriptive and high-quality label (min 5 words) covering the main topic of this segment"
+    }}
   ]
 }}"""
 

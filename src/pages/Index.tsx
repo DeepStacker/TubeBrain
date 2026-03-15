@@ -212,6 +212,37 @@ const Index = () => {
     return () => document.removeEventListener("mouseup", handleSelection);
   }, [isChatOpen]);
 
+  // YouTube Progress Tracking
+  useEffect(() => {
+    if (activeView !== "analysis" || !iframeRef.current) return;
+
+    const interval = setInterval(() => {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+          "*"
+        );
+      }
+    }, 500);
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data.event === "infoDelivery" && data.info && data.info.currentTime !== undefined) {
+          setCurrentTime(data.info.currentTime);
+        }
+      } catch (e) {
+        // Not a JSON message or not from YT
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [activeView, videoIds]);
+
   useEffect(() => {
     fetchUserData();
   }, []);

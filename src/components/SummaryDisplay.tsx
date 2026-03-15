@@ -95,6 +95,7 @@ const SummaryDisplay = ({
 }: SummaryDisplayProps) => {
   const [copied, setCopied] = useState(false);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const [activeTab, setActiveTab] = useState("chapters");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeLineRef = useRef<HTMLDivElement>(null);
 
@@ -109,10 +110,10 @@ const SummaryDisplay = ({
     if (isAutoScroll && activeLineRef.current) {
       activeLineRef.current.scrollIntoView({
         behavior: "smooth",
-        block: "center"
+        block: "center",
       });
     }
-  }, [currentTime, isAutoScroll]);
+  }, [currentTime, isAutoScroll, activeTab]);
 
   const findActiveTranscriptIndex = () => {
     if (transcript_segments) {
@@ -163,7 +164,7 @@ const SummaryDisplay = ({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="space-y-8 pb-20">
-      <Tabs defaultValue="chapters" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between mb-8 border-b pb-1">
           <TabsList className="bg-transparent p-0 gap-8 h-auto">
             <TabsTrigger 
