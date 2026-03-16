@@ -1,5 +1,6 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -48,7 +49,7 @@ export function AuthDialog({ onSuccess }: { onSuccess?: () => void }) {
   };
 
   const handleOAuth = (provider: string) => {
-    window.location.href = `${API_BASE_URL}/auth/${provider}/callback`;
+    window.location.href = `${API_BASE_URL}/auth/${provider}/authorize`;
   };
 
   return (
@@ -59,66 +60,130 @@ export function AuthDialog({ onSuccess }: { onSuccess?: () => void }) {
           <span>Sign In</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px] rounded-3xl border-gray-100">
-        <DialogHeader className="pb-2">
-          <DialogTitle className="text-xl font-bold text-foreground">
-            {mode === "login" ? "Welcome Back" : "Create Account"}
-          </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            Join 10,000+ learners analyzing videos with AI.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-none bg-white/80 backdrop-blur-2xl rounded-[32px] shadow-2xl ring-1 ring-black/5">
+        <div className="relative">
+          {/* Decorative background element */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-green-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="p-8 space-y-8 relative z-10">
+            <DialogHeader className="space-y-3">
+              <div className="flex justify-center mb-2">
+                <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/20 transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+                  <span className="text-white font-black text-xl">TB</span>
+                </div>
+              </div>
+              <DialogTitle className="text-2xl font-black text-center text-black tracking-tight">
+                {mode === "login" ? "Welcome back to TubeBrain" : "Join the future of learning"}
+              </DialogTitle>
+              <DialogDescription className="text-center text-gray-400 font-medium px-4">
+                {mode === "login" 
+                  ? "Continue your journey towards mastering any topic with the power of AI." 
+                  : "Create an account to start building your personal AI-powered knowledge base."}
+              </DialogDescription>
+            </DialogHeader>
 
-        {/* OAuth Buttons */}
-        <div className="flex gap-3 pt-2">
-          <Button variant="outline" className="flex-1 rounded-xl h-11 gap-2 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all" onClick={() => handleOAuth("google")}>
-            <Google className="h-4 w-4" />
-            <span className="text-sm font-medium">Google</span>
-          </Button>
-          <Button variant="outline" className="flex-1 rounded-xl h-11 gap-2 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all" onClick={() => handleOAuth("github")}>
-            <Github className="h-4 w-4" />
-            <span className="text-sm font-medium">GitHub</span>
-          </Button>
-        </div>
+            <div className="space-y-6">
+              {/* OAuth Buttons */}
+              <div className="grid grid-cols-2 gap-4">
+                <Button 
+                  variant="outline" 
+                  className="rounded-2xl h-14 gap-3 border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all font-bold shadow-sm" 
+                  onClick={() => handleOAuth("google")}
+                >
+                  <Google className="h-4 w-4" />
+                  Google
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="rounded-2xl h-14 gap-3 border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all font-bold shadow-sm" 
+                  onClick={() => handleOAuth("github")}
+                >
+                  <Github className="h-4 w-4" />
+                  GitHub
+                </Button>
+              </div>
 
-        <div className="relative py-1">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-gray-100" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-3 text-muted-foreground">Or continue with email</span>
-          </div>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {mode === "register" && (
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs font-medium text-muted-foreground">Full Name</Label>
-              <Input id="name" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="rounded-xl h-11 border-gray-200 focus:border-gray-300 focus:ring-1 focus:ring-gray-200" />
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-gray-100" />
+                </div>
+                <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-white/50 backdrop-blur-sm px-4 text-gray-300">Or continue with email</span>
+                </div>
+              </div>
+              
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={mode}
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-4"
+                  >
+                    {mode === "register" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name</Label>
+                        <Input 
+                          id="name" 
+                          placeholder="What should we call you?" 
+                          value={name} 
+                          onChange={e => setName(e.target.value)} 
+                          required 
+                          className="rounded-2xl h-14 border-gray-100 bg-gray-50/30 px-6 font-bold focus:bg-white focus:ring-black transition-all" 
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address</Label>
+                      <Input 
+                        id="email" 
+                        type="email" 
+                        placeholder="you@example.com" 
+                        value={email} 
+                        onChange={e => setEmail(e.target.value)} 
+                        required 
+                        className="rounded-2xl h-14 border-gray-100 bg-gray-50/30 px-6 font-bold focus:bg-white focus:ring-black transition-all" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Password</Label>
+                      <Input 
+                        id="password" 
+                        type="password" 
+                        placeholder="••••••••"
+                        value={password} 
+                        onChange={e => setPassword(e.target.value)} 
+                        required 
+                        className="rounded-2xl h-14 border-gray-100 bg-gray-50/30 px-6 font-bold focus:bg-white focus:ring-black transition-all" 
+                      />
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-black text-white hover:bg-gray-900 rounded-[20px] h-14 font-black text-sm shadow-xl shadow-black/10 mt-2 active:scale-[0.98] transition-all" 
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Synchronizing..." : mode === "login" ? "Sign In" : "Get Started"}
+                </Button>
+              </form>
+
+              <p className="text-center text-sm font-bold text-gray-400">
+                {mode === "login" ? "New to TubeBrain?" : "Already joining us?"}{" "}
+                <button 
+                  onClick={() => setMode(mode === "login" ? "register" : "login")}
+                  className="text-black hover:underline underline-offset-4"
+                >
+                  {mode === "login" ? "Create an account" : "Log in now"}
+                </button>
+              </p>
             </div>
-          )}
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">Email</Label>
-            <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required className="rounded-xl h-11 border-gray-200 focus:border-gray-300 focus:ring-1 focus:ring-gray-200" />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">Password</Label>
-            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required className="rounded-xl h-11 border-gray-200 focus:border-gray-300 focus:ring-1 focus:ring-gray-200" />
-          </div>
-          <Button type="submit" className="w-full bg-black text-white hover:bg-gray-900 rounded-xl h-11 font-semibold text-sm mt-1" disabled={isLoading}>
-            {isLoading ? "Loading..." : mode === "login" ? "Sign In" : "Create Account"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button 
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-            className="text-black font-semibold hover:underline"
-          >
-            {mode === "login" ? "Sign Up" : "Log In"}
-          </button>
-        </p>
+        </div>
       </DialogContent>
     </Dialog>
   );

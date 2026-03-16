@@ -2,14 +2,15 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models.models import Analysis, Transcript, User, Video
-from app.schemas.schemas import AnalysisDetailResponse, AnalysisResponse, MessageResponse
+from app.schemas.schemas import AnalysisDetailResponse, AnalysisResponse, MessageResponse, VideoResponse
+from app.services.ai_pipeline import synthesize_content
 
 router = APIRouter()
 
@@ -134,6 +135,65 @@ async def delete_analysis(
     await db.delete(analysis)
     await db.commit()
     return MessageResponse(message="Analysis deleted")
+
+
+@router.post("/{analysis_id}/generate", response_model=AnalysisResponse)
+async def generate_tool(
+    analysis_id: UUID,
+    tool_type: str = Query(..., pattern="^(quiz|roadmap|mind_map|flashcards|takeaways|learning_context)$"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a specific tool for an existing analysis on demand."""
+    result = await db.execute(
+        select(Analysis).where(Analysis.id == analysis_id, Analysis.user_id == user.id)
+    )
+    analysis = result.scalar_one_or_none()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    # If tool already exists, just return it (or we could force re-generation)
+    if getattr(analysis, tool_type) is not None:
+        return AnalysisResponse.model_validate(analysis)
+
+    # Need transcript
+    from app.models.models import Transcript
+    transcript_result = await db.execute(
+        select(Transcript).where(Transcript.video_id == analysis.video_id)
+    )
+    transcript = transcript_result.scalar_one_or_none()
+    if not transcript or not transcript.full_text:
+         raise HTTPException(status_code=400, detail="Transcript missing for generation")
+
+    # Get video metadata for context
+    video_result = await db.execute(select(Video).where(Video.id == analysis.video_id))
+    video = video_result.scalar_one_or_none()
+    metadata = {
+        "title": video.title if video else "Unknown",
+        "channel": video.channel if video else "Unknown"
+    }
+
+    # Call synthesis for just this tool
+    # We can refine synthesize_content to accept a specific tool list, 
+    # but for now we'll just run a slightly targeted synthesis.
+    ai_result = await synthesize_content(
+        transcript_text=transcript.full_text,
+        metadata=metadata,
+        expertise=analysis.expertise_level,
+        style=analysis.style,
+        minimal_mode=False, # We want full detail for tools
+    )
+
+    # Update analysis with the new tool
+    if tool_type in ai_result:
+        setattr(analysis, tool_type, ai_result[tool_type])
+        await db.commit()
+        await db.refresh(analysis)
+    else:
+        # If the requested tool wasn't in the generic synthesis (unlikely if prompt is followed)
+        raise HTTPException(status_code=500, detail=f"Failed to generate {tool_type}")
+
+    return AnalysisResponse.model_validate(analysis)
 
 
 @router.delete("/", response_model=MessageResponse)

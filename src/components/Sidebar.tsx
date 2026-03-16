@@ -17,7 +17,9 @@ import {
   Trash2,
   Check,
   HelpCircle,
-  MessageSquare
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -42,6 +44,8 @@ interface SidebarProps {
   onLogout: () => void;
   onAuthSuccess: () => void;
   onTopUp?: () => void;
+  isCollapsed: boolean;
+  setIsCollapsed: (collapsed: boolean) => void;
 }
 
 const Sidebar = ({ 
@@ -57,7 +61,9 @@ const Sidebar = ({
   credits,
   onLogout,
   onAuthSuccess,
-  onTopUp
+  onTopUp,
+  isCollapsed,
+  setIsCollapsed
 }: SidebarProps) => {
   const [isCreatingSpace, setIsCreatingSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState("");
@@ -102,24 +108,39 @@ const Sidebar = ({
 
   return (
     <aside className={cn("w-[240px] border-r border-gray-100 bg-white h-screen flex flex-col", className)}>
-      {/* Logo */}
-      <div className="flex items-center gap-2 px-5 pt-5 pb-4">
-        <div className="flex items-center gap-1.5">
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-            <path d="M4 6h2v12H4V6zm6 0h2v12h-2V6z" fill="currentColor"/>
-          </svg>
-          <span className="font-bold text-lg tracking-tight">YouLearn</span>
-        </div>
+      {/* Logo & Toggle */}
+      <div className={cn("flex items-center justify-between px-5 pt-5 pb-4", isCollapsed && "px-3")}>
+        {!isCollapsed && (
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-black rounded flex items-center justify-center">
+              <span className="text-white text-[12px] font-bold">TB</span>
+            </div>
+            <span className="font-bold text-lg tracking-tight">TubeBrain</span>
+          </div>
+        )}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className={cn(
+            "p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-foreground transition-all",
+            isCollapsed && "mx-auto"
+          )}
+        >
+          {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
       </div>
 
       {/* Add Content */}
-      <div className="px-3 mb-2">
+      <div className="px-3 mb-4">
         <button
           onClick={() => onViewChange?.("Add Content")}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors text-left"
+          className={cn(
+            "w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium bg-gray-50 hover:bg-gray-100 rounded-xl transition-all text-left",
+            isCollapsed && "justify-center px-0 bg-transparent hover:bg-gray-50"
+          )}
+          title={isCollapsed ? "Add content" : undefined}
         >
           <Plus className="h-4 w-4" />
-          <span>Add content</span>
+          {!isCollapsed && <span>Add content</span>}
         </button>
       </div>
 
@@ -133,11 +154,13 @@ const Sidebar = ({
               "w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-all text-left",
               activeView === item.name 
                 ? "bg-gray-100 text-foreground font-medium" 
-                : "text-muted-foreground hover:bg-gray-50 hover:text-foreground"
+                : "text-muted-foreground hover:bg-gray-50 hover:text-foreground",
+              isCollapsed && "justify-center px-0"
             )}
+            title={isCollapsed ? item.name : undefined}
           >
             <item.icon className="h-4 w-4" />
-            {item.name}
+            {!isCollapsed && item.name}
           </button>
         ))}
       </nav>
@@ -145,7 +168,7 @@ const Sidebar = ({
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-4">
         {/* Recents */}
-        {user && (
+        {user && !isCollapsed && (
           <div className="mb-4">
             <h3 className="px-3 text-xs font-medium text-muted-foreground mb-2 mt-4">Recents</h3>
             <div className="space-y-0.5">
@@ -179,7 +202,7 @@ const Sidebar = ({
         )}
 
         {/* Spaces */}
-        {user && (
+        {user && !isCollapsed && (
           <div>
             <h3 className="px-3 text-xs font-medium text-muted-foreground mb-2">Spaces</h3>
             
@@ -260,7 +283,7 @@ const Sidebar = ({
         )}
 
         {/* My Library */}
-        {user && (
+        {user && !isCollapsed && (
           <div className="mt-4">
             <button
               onClick={() => onViewChange?.("My Library")}
@@ -274,49 +297,61 @@ const Sidebar = ({
             </button>
           </div>
         )}
+        
+        {user && isCollapsed && (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <button
+              onClick={() => onViewChange?.("My Library")}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                activeView === "My Library" ? "bg-gray-100 text-foreground" : "text-muted-foreground hover:bg-gray-50 hover:text-foreground"
+              )}
+              title="My Library"
+            >
+              <Library className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Footer */}
-      <div className="border-t border-gray-100 px-3 py-3 space-y-1">
-        <button className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors text-left">
-          <HelpCircle className="h-4 w-4" />
-          Help & Tools
-        </button>
-        <button 
-          onClick={() => toast.info("Feedback feature coming soon!")}
-          className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors text-left"
-        >
-          <MessageSquare className="h-4 w-4" />
-          Feedback
-        </button>
-      </div>
-
-      {/* User / Plan Section */}
-      <div className="border-t border-gray-100 px-3 py-3">
+      {/* Bottom Section */}
+      <div className={cn("mt-auto px-3 pb-4", isCollapsed && "px-1")}>
         {user ? (
-          <>
-            <div className="px-3 mb-2">
-              <span className="text-[10px] font-medium text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">Free Plan</span>
-            </div>
+          <div className="space-y-2">
+             {!isCollapsed && (
+              <button 
+                onClick={onTopUp}
+                className="w-full h-8 flex items-center justify-center text-[11px] font-semibold text-[#00a86b] bg-[#e6f9f1] hover:bg-[#d5f2e4] rounded-lg transition-colors border border-[#ccf0dd]"
+              >
+                Upgrade Plan
+              </button>
+            )}
+            
             <button 
               onClick={() => onViewChange?.("Settings")}
               className={cn(
-                "w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all group",
-                activeView === "Settings" ? "bg-gray-100" : "hover:bg-gray-50"
+                "w-full flex items-center justify-between px-3 py-2 rounded-2xl transition-all group",
+                activeView === "Settings" || activeView === "settings" ? "bg-gray-50 border border-gray-100" : "hover:bg-gray-50",
+                isCollapsed && "px-2 justify-center"
               )}
+              title={isCollapsed ? "Settings" : undefined}
             >
-              <div className="flex items-center gap-2.5">
-                <Avatar className="h-6 w-6">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-8 w-8 rounded-xl">
                   <AvatarImage src={user.avatar_url} />
-                  <AvatarFallback className="text-[10px] font-semibold bg-green-100 text-green-700">
-                    {user.name?.charAt(0) || "U"}
+                  <AvatarFallback className="text-[12px] font-semibold bg-gray-100 text-gray-700">
+                    {user.name?.charAt(0).toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-medium truncate max-w-[120px]">{user.name || "User"}</span>
+                {!isCollapsed && (
+                  <div className="flex flex-col items-start overflow-hidden">
+                    <span className="text-sm font-bold truncate max-w-[110px]">{user.name || "User"}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Free Plan</span>
+                  </div>
+                )}
               </div>
-              <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+              {!isCollapsed && <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-foreground transition-colors" />}
             </button>
-          </>
+          </div>
         ) : (
           <div className="px-1">
             <AuthDialog onSuccess={onAuthSuccess} />

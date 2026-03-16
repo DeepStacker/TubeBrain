@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
+  Search,
   ArrowRight, 
   Upload, 
   Link as LinkIcon, 
@@ -125,182 +126,89 @@ const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", o
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto py-16 px-4">
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        className="hidden" 
-        aria-label="Upload file"
-        accept="audio/*,video/*,.pdf,.txt,.md"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          if (!getAuthToken()) {
-            toast.error("Please sign in to upload files");
-            return;
-          }
-          setIsUploading(true);
-          try {
-            const formData = new FormData();
-            formData.append("file", file);
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/videos/upload`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${getAuthToken()}` },
-              body: formData,
-            });
-            if (!res.ok) {
-              const err = await res.json();
-              throw new Error(err.detail || "Upload failed");
-            }
-            const data = await res.json();
-            toast.success(`Uploaded: ${file.name}`);
-            if (data.id) onUploadComplete?.(data.id);
-          } catch (err: any) {
-            toast.error(err.message || "Upload failed. Please try again.");
-          } finally {
-            setIsUploading(false);
-            e.target.value = "";
-          }
-        }}
-      />
-
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
-      >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">AI-Powered Learning</p>
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-b from-gray-900 to-gray-500 bg-clip-text text-transparent">
-          What do you want to learn?
-        </h1>
-        <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto">
-          Paste a YouTube link and get instant summaries, flashcards, quizzes, and more.
-        </p>
-      </motion.div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div className="w-full max-w-4xl mx-auto px-4">
+      {/* Action Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         {actions.map((action, i) => (
           <motion.button
             key={i}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
+            transition={{ 
+              delay: i * 0.1,
+              duration: 0.5,
+              ease: [0.23, 1, 0.32, 1]
+            }}
+            whileHover={{ 
+              y: -8,
+              scale: 1.02,
+              transition: { duration: 0.3, ease: "easeOut" }
+            }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handleActionClick(action.title)}
             aria-label={action.title}
             className={cn(
-              "p-6 rounded-3xl border text-left transition-all relative group h-32 flex flex-col justify-between",
-              (action.active || (action.title === "Record" && isRecording))
-                ? "bg-white border-gray-200 shadow-sm" 
-                : "bg-transparent border-transparent hover:bg-gray-50"
+              "flex flex-col items-center justify-center p-6 rounded-[40px] bg-white border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-black/5 hover:border-gray-200 transition-all group aspect-square relative overflow-hidden",
+              (action.title === "Record" && isRecording) && "border-red-200 bg-red-50/10"
             )}
           >
-            {action.badge && (
-              <span className={cn(
-                "absolute top-4 right-4 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase",
-                action.badgeColor
-              )}>
-                {action.badge}
-              </span>
-            )}
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            
             <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-sm border border-gray-100 bg-white",
-              (action.active || isRecording) ? "text-gray-900" : "text-gray-500 group-hover:text-gray-900"
+              "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 mb-4 z-10",
+              (action.title === "Record" && isRecording) ? "bg-red-100 text-red-600" : "bg-gray-50 text-gray-900 group-hover:bg-black group-hover:text-white group-hover:rotate-6"
             )}>
               {action.icon}
             </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">
-                {action.title === "Record" && isRecording ? `Stop (${formatTime(recordingTime)})` : action.title}
-              </p>
-              <p className="text-xs text-muted-foreground">{action.desc}</p>
-            </div>
+            <span className="text-sm font-bold text-foreground z-10">{action.title}</span>
+            <span className="text-[10px] text-muted-foreground mt-1.5 text-center line-clamp-1 z-10 font-medium">{action.desc}</span>
           </motion.button>
         ))}
       </div>
 
       <div className="max-w-3xl mx-auto space-y-4">
-        <AnimatePresence>
-          {urls.length > 0 && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="flex flex-wrap gap-2 mb-4 overflow-hidden"
-            >
-              {urls.map((u, i) => (
-                <div key={i} className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200">
-                  <LinkIcon className="h-3 w-3" />
-                  <span className="truncate max-w-[200px]">{u}</span>
-                  <button onClick={() => removeUrl(i)} className="hover:text-red-500 transition-colors">
-                     <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {urls.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {urls.map((u, i) => (
+              <div key={i} className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-100 text-gray-600">
+                <LinkIcon className="h-3 w-3" />
+                <span className="truncate max-w-[200px]">{u}</span>
+                <button onClick={() => removeUrl(i)} className="hover:text-red-500 transition-colors">
+                   <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-        <motion.form
-          onSubmit={handleSubmit}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="relative group w-full"
-        >
-          <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-gray-100 to-gray-50 blur opacity-0 group-focus-within:opacity-100 transition duration-1000" />
-          <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm h-16 px-6 focus-within:border-gray-300 transition-all gap-3">
+        <div className="relative group">
+          <form
+            onSubmit={handleSubmit}
+            className="relative flex items-center bg-white border border-gray-100 rounded-[32px] px-6 h-16 shadow-sm focus-within:shadow-md focus-within:border-gray-200 transition-all gap-4"
+          >
+            <Search className="h-5 w-5 text-gray-400" />
             <input
               type="text"
               value={url}
               onChange={e => setUrl(e.target.value)}
-              aria-label="YouTube video URL"
-              onPaste={e => {
-                const text = e.clipboardData.getData('text');
-                const match = text.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
-                if (match && urls.length === 0 && !isLoading) {
-                  setTimeout(() => {
-                    onSubmit([text], { 
-                      provider: "groq", 
-                      model: "llama-3.3-70b-versatile", 
-                      language: "English", 
-                      style: analysisStyle || "Detailed" 
-                    });
-                  }, 50);
-                }
-              }}
               disabled={isLoading}
-              placeholder={urls.length > 0 ? "Add another video for synthesis..." : "Paste a YouTube link to start learning"}
+              placeholder="Learn anything"
               className="flex-1 bg-transparent text-lg focus:outline-none placeholder:text-gray-400 font-medium"
             />
             
-            {url.trim() && (
-              <Button 
-                type="button"
-                variant="ghost" 
-                onClick={handleAdd}
-                className="h-10 px-4 rounded-xl font-bold text-xs uppercase bg-gray-50 hover:bg-gray-100 border border-gray-100"
-              >
-                Add
-              </Button>
-            )}
-
             <button
               type="submit"
               disabled={isLoading || (!url.trim() && urls.length === 0)}
-              aria-label="Analyze video"
               className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center transition-all",
                 (url.trim() || urls.length > 0) ? "bg-black text-white" : "bg-gray-100 text-gray-300"
               )}
             >
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <ArrowRight className="h-5 w-5" />
-              )}
+              <ArrowRight className="h-5 w-5" />
             </button>
-          </div>
-        </motion.form>
+          </form>
+        </div>
+
         
         {urls.length > 1 && (
           <p className="text-center text-xs font-medium text-green-600 animate-pulse">

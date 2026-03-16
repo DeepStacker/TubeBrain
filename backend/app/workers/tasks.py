@@ -145,6 +145,9 @@ async def process_video_analysis(
                         video.channel = metadata.get("channel")
                         video.description = metadata.get("description")
                         video.duration_seconds = metadata.get("duration_seconds")
+                        video.view_count = metadata.get("view_count")
+                        video.like_count = metadata.get("like_count")
+                        video.published_at = metadata.get("published_at")
                         video.thumbnail_url = metadata.get("thumbnail_url")
                         video.language = metadata.get("language")
                         video.progress_percentage = 20

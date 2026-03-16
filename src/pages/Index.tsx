@@ -4,6 +4,7 @@ import {
   Plus, 
   Share2, 
   ChevronLeft,
+  ChevronRight,
   Search,
   PlusCircle,
   FolderOpen,
@@ -18,15 +19,23 @@ import {
   Trash2,
   Download,
   ExternalLink,
-  ChevronRight,
   Coins,
   Play,
   MoreHorizontal,
   Menu,
   FileDown,
   Upload,
-  GraduationCap
+  GraduationCap,
+  ArrowRight,
+  LayoutDashboard,
+  Library,
+  Settings,
+  Wallet,
+  Bell,
+  LogOut,
+  HelpCircle
 } from "lucide-react";
+import { BottomNav } from "@/components/BottomNav";
 import Sidebar from "@/components/Sidebar";
 import LearnTools from "@/components/LearnTools";
 import UrlInput from "@/components/UrlInput";
@@ -71,11 +80,14 @@ import {
   apiFetch, 
   videoApi, 
   getAuthToken,
+  setAuthToken,
   authApi,
   creditApi,
   paymentApi,
   exportApi,
   chatApi,
+  analysisApi,
+  searchApi,
   removeAuthToken 
 } from "@/lib/api";
 import { extractVideoId, POLL_INTERVAL_MS, POLL_MAX_ATTEMPTS, MAX_RECENTS_SHOWN, MAX_CHAT_HISTORY_CONTEXT, STORAGE_KEYS, API_BASE_URL } from "@/lib/constants";
@@ -86,6 +98,7 @@ const Index = () => {
   const [expertise, setExpertise] = useState<"Beginner" | "Intermediate" | "Expert">("Intermediate");
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // ... existing states
@@ -123,6 +136,13 @@ const Index = () => {
   const [user, setUser] = useState<any>(null);
   const [credits, setCredits] = useState<number | null>(null);
   const [deleteSpaceConfirmId, setDeleteSpaceConfirmId] = useState<string | null>(null);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("profile");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [generatingTools, setGeneratingTools] = useState<string[]>([]);
 
   const fetchTransactions = async () => {
     try {
@@ -143,16 +163,29 @@ const Index = () => {
       return;
     }
     try {
-      const [userRes, creditRes] = await Promise.all([
+      const [userRes, creditRes, hItems, sItems] = await Promise.all([
         authApi.getMe(),
-        creditApi.getBalance()
+        creditApi.getBalance(),
+        fetchHistory(),
+        fetchSpaces()
       ]);
       
+      setHistoryItems(hItems);
+      setSpaces(sItems);
+
       if (userRes.ok) {
         const userData = await userRes.json();
         setUser(userData);
         localStorage.setItem(STORAGE_KEYS.USER_NAME, userData.name || '');
         localStorage.setItem(STORAGE_KEYS.USER_EMAIL, userData.email || '');
+        
+        // Sync settings
+        if (userData.settings) {
+          if (userData.settings.expertise) {
+            const exp = userData.settings.expertise.charAt(0).toUpperCase() + userData.settings.expertise.slice(1);
+            setExpertise(exp as any);
+          }
+        }
       }
       
       if (creditRes.ok) {
@@ -180,13 +213,17 @@ const Index = () => {
   const handleUpdateProfile = async () => {
     if (!newName.trim()) return;
     try {
-      const res = await authApi.updateMe({ name: newName.trim() });
+      const res = await authApi.updateMe({ 
+        name: newName.trim(),
+        settings: {
+          expertise: expertise.toLowerCase(),
+        }
+      });
       if (res.ok) {
         const updatedUser = await res.json();
         setUser(updatedUser);
         localStorage.setItem(STORAGE_KEYS.USER_NAME, updatedUser.name);
-        setIsProfileUpdateOpen(false);
-        toast.success("Profile updated!");
+        toast.success("Profile and settings updated!");
       } else {
         toast.error("Failed to update profile");
       }
@@ -245,7 +282,31 @@ const Index = () => {
   }, [activeView, videoIds]);
 
   useEffect(() => {
+    // Handle OAuth redirect: read token from URL query params after server-side OAuth flow
+    const params = new URLSearchParams(window.location.search);
+    const oauthToken = params.get("token");
+    const oauthError = params.get("error");
+
+    if (oauthError) {
+      toast.error("Sign-in failed. Please try again.");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (oauthToken) {
+      setAuthToken(oauthToken);
+      // Clean up URL so the token doesn't stay in browser history
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
     fetchUserData();
+
+    // Keyboard shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -565,13 +626,53 @@ const Index = () => {
         metadata: mData,
         status: "completed"
       });
-
-      setAnalysisStatus(null);
-      setAnalysisProgress(0);
       setHistoryItems(await fetchHistory());
-      return data;
     }
-    return null;
+    return data;
+  };
+
+  const handleGenerateTool = async (toolId: string) => {
+    if (!activeAnalysisId) return;
+    
+    setGeneratingTools(prev => [...prev, toolId]);
+    try {
+      const toolTypeMap: Record<string, string> = {
+        'quiz': 'quiz',
+        'roadmap': 'roadmap',
+        'mindmap': 'mind_map',
+        'flashcards': 'flashcards',
+        'takeaways': 'takeaways'
+      };
+      
+      const backendToolType = toolTypeMap[toolId];
+      if (!backendToolType) return;
+
+      const res = await analysisApi.generateTool(activeAnalysisId, backendToolType);
+      if (res.ok) {
+        const updatedAnalysis = await res.json();
+        
+        // Update summaryData with new tool
+        setSummaryData(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            [backendToolType]: updatedAnalysis[backendToolType]
+          };
+        });
+        
+        toast.success(`${toolId.charAt(0).toUpperCase() + toolId.slice(1)} generated!`);
+        
+        // Update history item
+        setHistoryItems(await fetchHistory());
+      } else {
+        toast.error(`Failed to generate ${toolId}`);
+      }
+    } catch (err) {
+      logger.error(`Generation error for ${toolId}:`, err);
+      toast.error("An error occurred during generation");
+    } finally {
+      setGeneratingTools(prev => prev.filter(id => id !== toolId));
+    }
   };
 
   const handleTimestampClick = (seconds: number) => {
@@ -774,7 +875,11 @@ const Index = () => {
 
   const handleSidebarClick = (view: string | { type: string; id: string; name: string }) => {
     if (typeof view === "string") {
-      if (view === "Search" || view === "Add Content") {
+      if (view === "Search") {
+        setIsSearchModalOpen(true);
+        return;
+      }
+      if (view === "Add Content") {
         setActiveView("dashboard");
         setSelectedSpace(null);
       } else if (view === "History") {
@@ -789,8 +894,7 @@ const Index = () => {
           setSelectedSpace(null);
         } else toast.error("No active analysis. Start a search first.");
       } else if (view === "Settings") {
-        setActiveView("settings");
-        setSelectedSpace(null);
+        setIsSettingsModalOpen(true);
       }
     } else if (view.type === "Space") {
       const updatedSpaces = getSpaces();
@@ -852,51 +956,63 @@ const Index = () => {
   return (
     <div className="flex bg-white h-screen overflow-hidden text-foreground">
       {/* Sidebar - hidden on mobile unless toggled, always visible on desktop unless focus mode */}
-      {!isFocusMode && (
-        <>
-          {/* Mobile overlay */}
-          <AnimatePresence>
-            {isSidebarOpen && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 lg:hidden"
-                onClick={() => setIsSidebarOpen(false)}
+      <AnimatePresence>
+        {!isFocusMode && (
+          <motion.div
+            initial={{ x: -280, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -280, opacity: 0 }}
+            transition={{ duration: 0.5, ease: "circOut" }}
+            className="z-50"
+          >
+            {/* Mobile overlay */}
+            <AnimatePresence>
+              {isSidebarOpen && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 lg:hidden"
+                  onClick={() => setIsSidebarOpen(false)}
+                />
+              )}
+            </AnimatePresence>
+            <div className={cn(
+              "fixed lg:relative z-50 lg:z-auto transition-transform duration-300 ease-out",
+              isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+              isSidebarCollapsed ? "lg:w-[72px]" : "lg:w-[240px]"
+            )}>
+              <Sidebar 
+                onViewChange={(view) => {
+                  handleSidebarClick(view);
+                  // Close sidebar on mobile after navigation
+                  if (window.innerWidth < 1024) setIsSidebarOpen(false);
+                }} 
+                activeView={
+                  activeView === "dashboard" ? "Search" : 
+                  activeView === "space" ? selectedSpace?.name :
+                  activeView === "settings" ? "settings" :
+                  activeView.charAt(0).toUpperCase() + activeView.slice(1)
+                }
+                recents={historyItems.slice(0, 5).map(h => h.title)}
+                spaces={spaces}
+                onCreateSpace={handleCreateNewSpace}
+                onRenameSpace={handleRenameSpace}
+                onDeleteSpace={handleDeleteSpace}
+                user={user}
+                credits={credits}
+                onLogout={handleLogout}
+                onAuthSuccess={fetchUserData}
+                onTopUp={() => setIsTopUpOpen(true)}
+                isCollapsed={isSidebarCollapsed}
+                setIsCollapsed={setIsSidebarCollapsed}
+                className={isSidebarCollapsed ? "w-[72px]" : "w-[240px]"}
               />
-            )}
-          </AnimatePresence>
-          <div className={cn(
-            "fixed lg:relative z-50 lg:z-auto transition-transform duration-300 ease-out",
-            isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          )}>
-            <Sidebar 
-              onViewChange={(view) => {
-                handleSidebarClick(view);
-                // Close sidebar on mobile after navigation
-                if (window.innerWidth < 1024) setIsSidebarOpen(false);
-              }} 
-              activeView={
-                activeView === "dashboard" ? "Search" : 
-                activeView === "space" ? selectedSpace?.name :
-                activeView === "settings" ? "Settings" :
-                activeView.charAt(0).toUpperCase() + activeView.slice(1)
-              }
-              recents={historyItems.slice(0, 5).map(h => h.title)}
-              spaces={spaces}
-              onCreateSpace={handleCreateNewSpace}
-              onRenameSpace={handleRenameSpace}
-              onDeleteSpace={handleDeleteSpace}
-              user={user}
-              credits={credits}
-              onLogout={handleLogout}
-              onAuthSuccess={fetchUserData}
-              onTopUp={() => setIsTopUpOpen(true)}
-            />
-          </div>
-        </>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* ... Feedback Dialog ... */}
       <Dialog open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen}>
@@ -997,14 +1113,234 @@ const Index = () => {
                  <h3 className="text-xl font-bold mb-1">2000 Credits</h3>
                  <p className="text-[10px] font-bold text-white/40 group-hover:text-white/60 transition-colors">For serious learners and power users.</p>
                </button>
-
-               <p className="text-[10px] font-medium text-center text-gray-400 px-4">Secure payment via Razorpay. Credits expire 12 months from purchase.</p>
+       <p className="text-[10px] font-medium text-center text-gray-400 px-4">Secure payment via Razorpay. Credits expire 12 months from purchase.</p>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Delete Space Confirmation */}
+      {/* Settings Modal */}
+      <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
+        <DialogContent className="max-w-4xl p-0 border-none bg-gray-50/50 backdrop-blur-xl overflow-hidden rounded-[40px] shadow-2xl">
+          <div className="flex flex-col lg:flex-row h-[600px]">
+            {/* Sidebar */}
+            <div className="w-full lg:w-64 bg-white border-r border-gray-100 p-8 flex flex-col gap-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-black flex items-center justify-center">
+                  <Settings className="h-5 w-5 text-white" />
+                </div>
+                <h2 className="text-xl font-bold">Settings</h2>
+              </div>
+              
+              <nav className="flex flex-col gap-1">
+                {[
+                  { id: 'profile', label: 'Profile', icon: UserIcon },
+                  { id: 'billing', label: 'Credits & Billing', icon: Wallet },
+                  { id: 'notifications', label: 'Notifications', icon: Bell },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSettingsTab(tab.id)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all",
+                      settingsTab === tab.id 
+                        ? "bg-black text-white shadow-lg shadow-black/10" 
+                        : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                    )}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="mt-auto pt-8 border-t border-gray-100">
+                <button 
+                  onClick={() => {
+                    handleLogout();
+                    setIsSettingsModalOpen(false);
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-red-500 hover:bg-red-50 transition-all w-full text-left"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto p-10 lg:p-12">
+              <AnimatePresence mode="wait">
+                {settingsTab === 'profile' && user && (
+                  <motion.div
+                    key="profile"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-8"
+                  >
+                    <div className="flex items-center gap-6">
+                      <Avatar className="h-24 w-24 rounded-[32px] border-4 border-white shadow-xl">
+                        <AvatarImage src={user.avatar_url} />
+                        <AvatarFallback className="bg-black text-white text-3xl font-black">
+                          {user.name?.charAt(0) || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="text-2xl font-black text-black">{user.name}</h3>
+                        <p className="text-sm font-medium text-gray-400">{user.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name</label>
+                        <Input 
+                          value={newName} 
+                          onChange={(e) => setNewName(e.target.value)}
+                          className="h-14 rounded-2xl border-gray-100 px-6 font-bold focus:ring-black" 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address</label>
+                        <Input 
+                          value={user.email} 
+                          disabled
+                          className="h-14 rounded-2xl border-gray-100 px-6 font-bold bg-gray-50/50 text-gray-400" 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-6 pt-4">
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Cognitive Expertise</label>
+                        <div className="flex gap-3">
+                          {['Beginner', 'Intermediate', 'Expert'].map((level) => (
+                            <button
+                              key={level}
+                              onClick={() => setExpertise(level as any)}
+                              className={cn(
+                                "flex-1 px-4 py-3 rounded-2xl text-xs font-bold transition-all border-2",
+                                expertise === level 
+                                  ? "bg-black text-white border-black shadow-lg shadow-black/10" 
+                                  : "bg-white text-gray-400 border-gray-100 hover:border-gray-200"
+                              )}
+                            >
+                              {level}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-medium ml-1">Adjusts the depth of synthesis and study tools.</p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Platform Theme</label>
+                        <div className="flex gap-3">
+                          {['Light', 'Dark', 'System'].map((t) => (
+                            <button
+                              key={t}
+                              className={cn(
+                                "flex-1 px-4 py-3 rounded-2xl text-xs font-bold transition-all border-2",
+                                t === 'Light' 
+                                  ? "bg-black text-white border-black shadow-lg shadow-black/10" 
+                                  : "bg-white text-gray-400 border-gray-100 opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-6">
+                      <Button 
+                        onClick={handleUpdateProfile}
+                        disabled={isLoading || newName === user.name}
+                        className="h-14 px-10 rounded-[24px] bg-black text-white hover:bg-gray-900 shadow-xl shadow-black/10 font-bold"
+                      >
+                        Save Changes
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {settingsTab === 'billing' && (
+                  <motion.div
+                    key="billing"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-10"
+                  >
+                    <div className="bg-black text-white p-10 rounded-[40px] shadow-2xl shadow-black/20 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-500" />
+                      <div className="relative z-10">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-4 block">Total Balance</span>
+                        <div className="flex items-end gap-3">
+                          <Coins className="h-10 w-10 text-amber-400 fill-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.3)]" />
+                          <h4 className="text-6xl font-black">{credits ?? 0}</h4>
+                          <span className="text-lg font-bold text-white/40 mb-2">Credits</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="p-8 rounded-[32px] border border-gray-100 bg-white hover:shadow-xl hover:shadow-black/5 transition-all">
+                        <h5 className="font-black text-lg mb-2">Standard Plan</h5>
+                        <p className="text-sm font-medium text-gray-400 mb-6">Perfect for occasional learning and research.</p>
+                        <ul className="space-y-3 mb-8">
+                           {['60 mins analysis / day', 'Basic study tools', 'Email support'].map(f => (
+                             <li key={f} className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                               <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                               {f}
+                             </li>
+                           ))}
+                        </ul>
+                        <Button className="w-full h-12 rounded-xl bg-gray-50 text-gray-400 font-bold uppercase tracking-widest text-[10px] cursor-not-allowed">Current Plan</Button>
+                      </div>
+
+                      <div className="p-8 rounded-[32px] border-2 border-black bg-white shadow-2xl shadow-black/5 relative group">
+                        <div className="absolute -top-3 right-8 bg-black text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Growth</div>
+                        <h5 className="font-black text-lg mb-2">Pro Access</h5>
+                        <p className="text-sm font-medium text-gray-400 mb-6">Unlimited synthesis and advanced cognitive mapping.</p>
+                        <ul className="space-y-3 mb-8">
+                           {['Unlimited analysis', 'All study sets & tools', 'Priority support', 'Early access'].map(f => (
+                             <li key={f} className="flex items-center gap-2 text-xs font-bold text-gray-800">
+                               <div className="w-1.5 h-1.5 rounded-full bg-black" />
+                               {f}
+                             </li>
+                           ))}
+                        </ul>
+                        <Button onClick={() => setIsTopUpOpen(true)} className="w-full h-12 rounded-xl bg-black text-white hover:bg-gray-900 font-bold uppercase tracking-widest text-[10px] shadow-lg shadow-black/20">Upgrade Now</Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {settingsTab === 'notifications' && (
+                  <motion.div
+                    key="notifications"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="flex flex-col items-center justify-center h-full text-center space-y-6"
+                  >
+                    <div className="w-20 h-20 bg-gray-50 rounded-[28px] flex items-center justify-center border border-gray-100">
+                      <Bell className="h-10 w-10 text-gray-200" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-black mb-2">Coming Soon</h4>
+                      <p className="text-sm font-medium text-gray-400 max-w-[280px]">We're building a smarter notification system to keep you updated on your learning progress.</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!deleteSpaceConfirmId} onOpenChange={() => setDeleteSpaceConfirmId(null)}>
         <DialogContent className="rounded-2xl max-w-sm">
           <DialogHeader>
@@ -1019,6 +1355,109 @@ const Index = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Search Modal */}
+      <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
+        <DialogContent className="rounded-[32px] max-w-2xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white">
+            <div className="flex items-center px-6 h-20 border-b border-gray-50 gap-4">
+              <Search className="h-6 w-6 text-gray-400" />
+              <input 
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search in Library"
+                className="flex-1 bg-transparent text-xl focus:outline-none placeholder:text-gray-300 font-medium"
+              />
+              <div className="px-2 py-1 bg-gray-50 rounded-lg border border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">ESC</div>
+            </div>
+            
+            <div className="max-h-[60vh] overflow-y-auto p-4 scrollbar-thin">
+              {searchQuery.trim() === "" ? (
+                <div className="py-12 text-center">
+                  <p className="text-sm font-bold text-gray-400">Search for videos, spaces or topics</p>
+                  <div className="flex items-center justify-center gap-6 mt-6">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                       <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                       Videos
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                       <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                       Spaces
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {isSearchLoading ? (
+                    <div className="py-12 text-center">
+                       <p className="text-sm font-bold text-gray-400">Searching...</p>
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    <div>
+                       <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] px-3 mb-3">Found in Library</h4>
+                       <div className="space-y-1">
+                         {searchResults.map(result => (
+                           <button 
+                             key={result.id}
+                             onClick={() => {
+                               if (result.type === "video" || result.type === "analysis" || result.type === "transcript") {
+                                 handleLoadHistoryItem({
+                                   id: result.video_id || result.id,
+                                   title: result.title,
+                                   videoIds: [result.platform_id || result.video_id || result.id],
+                                   date: new Date().toISOString(),
+                                   // Dummy fields to satisfy type if needed, or better to update type
+                                   status: "ready"
+                                 } as any);
+                               }
+                               setIsSearchModalOpen(false);
+                               setSearchQuery("");
+                             }}
+                             className="w-full flex items-center gap-4 p-3 hover:bg-gray-50 rounded-[20px] transition-all group text-left"
+                           >
+                             <div className="w-16 h-10 bg-gray-100 rounded-xl overflow-hidden shrink-0 border border-gray-50">
+                               {result.thumbnail ? (
+                                 <img src={result.thumbnail} alt="" className="w-full h-full object-cover" />
+                               ) : (
+                                 <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                   <Search className="h-4 w-4 text-gray-200" />
+                                 </div>
+                               )}
+                             </div>
+                             <div className="min-w-0 flex-1">
+                               <p className="text-sm font-bold truncate group-hover:text-black transition-colors">{result.title}</p>
+                               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold truncate block">{result.subtitle}</span>
+                             </div>
+                             <ArrowRight className="h-4 w-4 text-gray-200 group-hover:text-black transition-all" />
+                           </button>
+                         ))}
+                       </div>
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center">
+                       <p className="text-sm font-bold text-gray-400">No results found for "{searchQuery}"</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-gray-50/50 border-t border-gray-50 flex items-center justify-between">
+               <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                     <div className="px-1.5 py-0.5 bg-white rounded border border-gray-200 text-[9px] font-bold text-gray-400">↑↓</div>
+                     <span className="text-[9px] font-bold text-gray-400 uppercase">Navigate</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                     <div className="px-1.5 py-0.5 bg-white rounded border border-gray-200 text-[9px] font-bold text-gray-400">ENTER</div>
+                     <span className="text-[9px] font-bold text-gray-400 uppercase">Open</span>
+                  </div>
+               </div>
+               <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">TubeBrain Search</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       {activeView === "analysis" && (
         <>
@@ -1031,7 +1470,7 @@ const Index = () => {
             contextSnippet={contextSnippet}
             onClearContext={() => setContextSnippet(null)}
           />
-          {!isChatOpen && (
+          {!isChatOpen && !isFocusMode && (
             <motion.button
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -1044,126 +1483,130 @@ const Index = () => {
         </>
       )}
       
-      <main id="main-content" role="main" aria-label="Main content" className="flex-1 relative overflow-y-auto scrollbar-thin">
-        {/* Top Bar */}
-        <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 px-6 py-2.5 flex items-center justify-between">
-           <div className="flex items-center gap-3 min-w-0">
-              {isFocusMode && (
-                <button 
-                  onClick={() => setIsFocusMode(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-all shrink-0"
-                >
-                  <PlusCircle className="h-5 w-5 rotate-45" />
-                </button>
-              )}
-              {!isFocusMode && (
-                <button 
-                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-all shrink-0 lg:hidden"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-              )}
-              {!isFocusMode && (
-                <div className="flex items-center gap-1.5 shrink-0 lg:hidden">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                    <path d="M4 6h2v12H4V6zm6 0h2v12h-2V6z" fill="currentColor"/>
-                  </svg>
-                </div>
-              )}
-              {activeView === "analysis" && videoData ? (
-                <div className="flex items-center gap-2 min-w-0">
+      <main id="main-content" role="main" aria-label="Main content" className={cn(
+        "flex-1 relative overflow-y-auto scrollbar-thin transition-all duration-700 ease-in-out",
+        isFocusMode && "bg-gray-50/30"
+      )}>
+        {/* Top Bar - Hide in Focus Mode */}
+        <AnimatePresence>
+          {!isFocusMode && (
+            <motion.div 
+              initial={{ y: -64, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -64, opacity: 0 }}
+              transition={{ duration: 0.5, ease: "circOut" }}
+              className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/50 px-6 h-16 flex items-center justify-between"
+            >
+               <div className="flex items-center gap-4 min-w-0">
                   <button 
-                    onClick={() => setActiveView("dashboard")} 
-                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                    aria-label="Back to dashboard"
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="p-2 hover:bg-gray-50 rounded-xl transition-all shrink-0 border border-transparent hover:border-gray-100"
                   >
-                    <ChevronLeft className="h-4 w-4 text-gray-400" />
+                    <Menu className="h-5 w-5 text-gray-500" />
                   </button>
-                  <h1 className="text-sm font-medium text-foreground truncate">{videoData.title}</h1>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 bg-gray-50 p-0.5 rounded-lg border border-gray-100">
-                   {(["Beginner", "Intermediate", "Expert"] as const).map((level) => (
-                      <button
-                        key={level}
-                        onClick={() => setExpertise(level)}
-                        className={cn(
-                          "px-3 py-1.5 text-xs rounded-md transition-all",
-                          expertise === level ? "bg-white text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {level}
-                      </button>
-                   ))}
-                </div>
-              )}
-           </div>
-           
-           <div className="flex items-center gap-2 shrink-0">
-              {activeView === "analysis" && activeAnalysisId && summaryData && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleExport("markdown")}
-                    className="rounded-lg h-8 px-3 text-xs font-medium border-gray-200 gap-1.5 hidden sm:inline-flex"
-                  >
-                    <FileDown className="h-3.5 w-3.5" />
-                    Export MD
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleExport("json")}
-                    className="rounded-lg h-8 px-3 text-xs font-medium border-gray-200 gap-1.5 hidden md:inline-flex"
-                  >
-                    <FileDown className="h-3.5 w-3.5" />
-                    Export JSON
-                  </Button>
-                </>
-              )}
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setIsTopUpOpen(true)}
-                className="rounded-full h-8 px-4 text-xs font-medium bg-green-600 hover:bg-green-700 text-white hidden sm:inline-flex"
-              >
-                Upgrade
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsFocusMode(!isFocusMode)}
-                className={cn(
-                  "rounded-lg h-8 px-3 text-xs font-medium border-gray-200 hidden md:inline-flex",
-                  isFocusMode && "bg-gray-900 text-white border-gray-900"
-                )}
-              >
-                {isFocusMode ? "Exit Focus" : "New Exam"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const url = window.location.href;
-                  navigator.clipboard.writeText(url);
-                  toast.success("Link copied!");
-                }}
-                className="rounded-lg h-8 px-3 text-xs font-medium border-gray-200 hidden md:inline-flex"
-              >
-                Share
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-gray-400"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-           </div>
-        </div>
+                  
+                  <div className="flex items-center gap-2 text-gray-300 mx-2 hidden md:flex">
+                     <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                  </div>
 
+                  {activeView === "analysis" && videoData ? (
+                    <div className="flex items-center gap-3 min-w-0">
+                      <h1 className="text-sm font-bold text-foreground truncate max-w-[300px]">{videoData.title}</h1>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 p-1 bg-gray-50/50 rounded-xl border border-gray-100">
+                       {(["Beginner", "Expert"] as const).map((level) => (
+                          <button
+                            key={level}
+                            onClick={() => setExpertise(level === "Beginner" ? "Beginner" : "Expert")}
+                            className={cn(
+                              "px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                              ((level === "Beginner" && expertise === "Beginner") || (level === "Expert" && expertise === "Expert")) 
+                                ? "bg-white text-black shadow-sm border border-gray-100" 
+                                : "text-gray-400 hover:text-gray-600"
+                            )}
+                          >
+                            {level}
+                          </button>
+                       ))}
+                    </div>
+                  )}
+               </div>
+               
+               <div className="flex items-center gap-3 shrink-0">
+                  <div className="hidden lg:flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsFocusMode(!isFocusMode)}
+                      className={cn(
+                        "rounded-xl h-9 px-4 text-xs font-bold uppercase tracking-wider transition-all gap-2",
+                        isFocusMode ? "bg-black text-white hover:bg-gray-900" : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
+                      )}
+                    >
+                      <GraduationCap className="h-4 w-4" />
+                      {isFocusMode ? "Exit Focus" : "Focus Mode"}
+                    </Button>
+
+                    {activeView === "analysis" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl h-9 px-4 text-xs font-bold uppercase tracking-wider border-gray-100 hover:bg-gray-50 gap-2"
+                      >
+                        <Share2 className="h-4 w-4" />
+                        Share
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="w-px h-4 bg-gray-100 mx-1 hidden sm:block" />
+
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setIsTopUpOpen(true)}
+                    className="rounded-full h-9 px-5 text-xs font-bold uppercase tracking-wider bg-black text-white hover:bg-gray-900 shadow-lg shadow-black/5"
+                  >
+                    Upgrade
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.href);
+                      toast.success("Link copied!");
+                    }}
+                    className="rounded-xl h-9 px-5 text-xs font-bold uppercase tracking-wider border-gray-100 hover:bg-gray-50"
+                  >
+                    Share
+                  </Button>
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Floating Exit Focus Button */}
+        <AnimatePresence>
+          {isFocusMode && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              className="fixed top-8 left-1/2 -translate-x-1/2 z-[60]"
+            >
+              <Button
+                onClick={() => setIsFocusMode(false)}
+                className="rounded-full h-12 px-8 bg-black text-white shadow-2xl hover:bg-gray-900 font-black text-xs uppercase tracking-[0.2em] border border-white/20 backdrop-blur-sm group"
+              >
+                <X className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
+                Exit Focus Mode
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
         <AnimatePresence mode="wait">
           {activeView === "analysis" && videoData ? (
             <motion.div 
@@ -1171,185 +1614,214 @@ const Index = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex h-full"
+              className="flex h-[calc(100vh-64px)] overflow-hidden"
             >
-              <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-                <div className="max-w-4xl mx-auto space-y-6 pb-20">
+              {/* Main Content Area */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                <div className={cn(
+                  "p-8 lg:p-12 transition-all duration-700 ease-in-out",
+                  isFocusMode ? "max-w-5xl mx-auto pt-24 pb-32" : "container mx-auto"
+                )}>
                   <div className={cn(
-                    "transition-all duration-500 ease-in-out origin-top relative group",
-                    isVideoMinimized ? "h-0 opacity-0 pointer-events-none mb-0 overflow-hidden" : "h-auto opacity-100"
+                    "flex flex-col lg:flex-row gap-8 lg:gap-12 transition-all duration-700",
+                    isFocusMode && "lg:gap-16"
                   )}>
-                    {!isVideoMinimized && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setIsVideoMinimized(true)}
-                        className="absolute top-4 right-6 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Minimize Video"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <VideoPreview 
-                      videoId={videoIds[0]} 
-                      {...videoData}
-                      thumbnail={`https://img.youtube.com/vi/${videoIds[0]}/maxresdefault.jpg`}
-                      iframeRef={iframeRef} 
-                    />
-                  </div>
+                    {/* Left Column - Video & Analysis */}
+                    <div className={cn(
+                      "flex-1 min-w-0 transition-all duration-700",
+                      isFocusMode ? "lg:w-[65%]" : ""
+                    )}>
+                      {/* Video Player Section */}
+                      <div className={cn(
+                        "transition-all duration-500 ease-in-out origin-top relative group rounded-[40px] overflow-hidden shadow-2xl shadow-black/5 border border-gray-100",
+                        isVideoMinimized ? "h-0 opacity-0 mb-0" : "h-auto opacity-100"
+                      )}>
+                        {!isVideoMinimized && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsVideoMinimized(true)}
+                            className="absolute top-4 right-6 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Minimize Video"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <VideoPreview 
+                          videoId={videoIds[0]} 
+                          {...videoData}
+                          thumbnail={`https://img.youtube.com/vi/${videoIds[0]}/maxresdefault.jpg`}
+                          iframeRef={iframeRef} 
+                        />
+                      </div>
 
-                  {isVideoMinimized && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="sticky top-0 z-40 pb-4"
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsVideoMinimized(false)}
-                        className="w-full rounded-2xl border-dashed border-gray-200 bg-gray-50/50 hover:bg-gray-100 transition-all font-bold uppercase tracking-widest text-[10px] h-10 gap-2"
-                      >
-                        <Play className="h-3 w-3" /> Show Video Player
-                      </Button>
-                    </motion.div>
-                  )}
-                  
-                  {isLoading || (activeAnalysisId && !summaryData) ? (
-                    <motion.div 
-                      key="loading"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className="py-12"
-                    >
-                      <div className="mb-12 bg-gray-50/50 border border-gray-100 p-8 rounded-[2.5rem] shadow-sm">
-                        <div className="flex items-end justify-between mb-8">
-                           <div>
-                             <h2 className="text-2xl font-bold mb-2">Analyzing Intelligence</h2>
-                             <div className="flex items-center gap-3">
-                               <div className="flex items-center gap-1.5">
-                                 <div className={cn("h-1.5 w-1.5 rounded-full animate-pulse", analysisProgress < 30 ? "bg-amber-500" : analysisProgress < 70 ? "bg-blue-500" : "bg-green-500")} />
-                                 <span className="text-xs font-medium text-gray-400">
-                                   {analysisProgress < 20 ? "Extracting Metadata" : 
-                                    analysisProgress < 50 ? "Generating Transcript" : 
-                                    analysisProgress < 80 ? "AI Synthesis Pipeline" : 
-                                    "Polishing Results"}
-                                 </span>
-                               </div>
-                             </div>
-                           </div>
-                           <div className="text-right">
-                             <p className="text-xs font-medium text-gray-300 mb-1">Overall Progress</p>
-                             <div className="flex flex-col items-end">
-                               <span className="text-4xl font-bold leading-none text-black">{analysisProgress}%</span>
-                               {estimatedRemaining !== null && estimatedRemaining > 0 && (
-                                 <span className="text-xs font-medium text-blue-500 mt-2">
-                                   Est. Remaining: {Math.floor(estimatedRemaining / 60)}:{String(estimatedRemaining % 60).padStart(2, '0')}
-                                 </span>
-                               )}
-                             </div>
-                           </div>
-                        </div>
-                        
-                        <div className="relative h-4 w-full bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-inner">
-                           <motion.div 
-                             className="absolute inset-y-0 left-0 bg-black"
-                             initial={{ width: 0 }}
-                             animate={{ width: `${analysisProgress}%` }}
-                             transition={{ duration: 0.8, ease: "circOut" }}
-                           />
-                        </div>
-                        
-                        <div className="grid grid-cols-4 gap-2 mt-4">
-                           {[25, 50, 75, 100].map((step) => (
-                             <div key={step} className={cn(
-                               "h-1 rounded-full transition-colors duration-500",
-                               analysisProgress >= step ? "bg-black" : "bg-gray-200"
-                             )} />
-                           ))}
-                        </div>
+                      {isVideoMinimized && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="sticky top-0 z-40 pb-4"
+                        >
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsVideoMinimized(false)}
+                            className="w-full rounded-[24px] border border-gray-100 bg-white hover:bg-gray-50 transition-all font-bold uppercase tracking-widest text-[10px] h-12 gap-3"
+                          >
+                            <Play className="h-4 w-4" /> Show Video Player
+                          </Button>
+                        </motion.div>
+                      )}
+
+                      {/* Content States: Loading, Summary, or Empty */}
+                      <AnimatePresence mode="wait">
+                        {isLoading || (activeAnalysisId && !summaryData) ? (
+                          <motion.div 
+                            key="loading"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="py-12"
+                          >
+                            <div className="bg-gray-50/50 border border-gray-100 p-10 rounded-[40px] shadow-sm">
+                              <div className="flex items-end justify-between mb-10">
+                                 <div>
+                                   <h2 className="text-3xl font-bold mb-3">Synthesizing Knowledge</h2>
+                                   <div className="flex items-center gap-3">
+                                     <div className="flex items-center gap-2">
+                                       <div className={cn("h-2 w-2 rounded-full animate-pulse", analysisProgress < 30 ? "bg-amber-500" : analysisProgress < 70 ? "bg-blue-500" : "bg-green-500")} />
+                                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                         {analysisProgress < 20 ? "Pre-processing" : 
+                                          analysisProgress < 50 ? "Transcript Extraction" : 
+                                          analysisProgress < 80 ? "AI Analysis" : 
+                                          "Finalizing"}
+                                       </span>
+                                     </div>
+                                   </div>
+                                 </div>
+                                 <div className="text-right">
+                                   <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-2">Progress</p>
+                                   <div className="flex flex-col items-end">
+                                     <span className="text-5xl font-black leading-none text-black">{analysisProgress}%</span>
+                                   </div>
+                                 </div>
+                              </div>
+                              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                                 <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${analysisProgress}%` }}
+                                  className="h-full bg-black transition-all duration-500"
+                                 />
+                              </div>
+                              <div className="grid grid-cols-4 gap-2 mt-10">
+                                 {[25, 50, 75, 100].map((step) => (
+                                   <div key={step} className={cn(
+                                     "h-1.5 rounded-full transition-colors duration-500",
+                                     analysisProgress >= step ? "bg-black" : "bg-gray-200"
+                                   )} />
+                                 ))}
+                              </div>
+                            </div>
+                            <div className="opacity-40 grayscale pointer-events-none mt-12">
+                              <LoadingSkeleton />
+                            </div>
+                          </motion.div>
+                        ) : summaryData ? (
+                          <motion.div
+                            key="summary"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="space-y-8"
+                          >
+                            <SummaryDisplay 
+                              {...summaryData}
+                              transcript={transcript}
+                              transcript_segments={summaryData.transcript_segments}
+                              onTimestampClick={handleTimestampClick}
+                              spaces={spaces}
+                              onAddToSpace={handleAddToSpace}
+                              currentTime={currentTime}
+                            />
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Right Column - Desktop Study Tools (Hidden in Focus Mode) */}
+                    {!isFocusMode && (
+                      <div className="hidden lg:block w-[350px] shrink-0 sticky top-24 self-start">
+                        <LearnTools 
+                          onToolClick={handleToolClick} 
+                          hasQuiz={!!summaryData?.quiz}
+                          hasFlashcards={!!summaryData?.flashcards}
+                          hasRoadmap={!!summaryData?.roadmap}
+                          hasMindMap={!!summaryData?.mind_map}
+                          isChatLoading={isChatLoading}
+                          onGenerate={handleGenerateTool}
+                          generatingTools={generatingTools}
+                          sets={summaryData ? [
+                            ...(summaryData.quiz ? [{ id: 'quiz', name: 'Knowledge Quiz', date: 'Generated', type: 'quiz' }] : []),
+                            ...(summaryData.flashcards ? [{ id: 'flashcards', name: 'Brain Cards', date: 'Generated', type: 'flashcards' }] : []),
+                            ...(summaryData.roadmap ? [{ id: 'roadmap', name: 'Learning Path', date: 'Generated', type: 'roadmap' }] : []),
+                            ...(summaryData.mind_map ? [{ id: 'mind_map', name: 'Mind Map', date: 'Generated', type: 'mind_map' }] : []),
+                          ] : []}
+                        />
                       </div>
-                      <div className="opacity-40 grayscale pointer-events-none">
-                        <LoadingSkeleton />
-                      </div>
-                    </motion.div>
-                  ) : summaryData ? (
-                    <SummaryDisplay 
-                      {...summaryData}
-                      transcript={transcript}
-                      transcript_segments={summaryData.transcript_segments}
-                      onTimestampClick={handleTimestampClick}
-                      spaces={spaces}
-                      onAddToSpace={handleAddToSpace}
-                      currentTime={currentTime}
-                    />
-                  ) : null}
+                    )}
+                  </div>
                 </div>
               </div>
-              
-              <LearnTools 
-                onToolClick={handleToolClick} 
-                hasQuiz={!!summaryData?.quiz?.length}
-                hasFlashcards={!!summaryData?.flashcards?.length}
-                hasRoadmap={!!summaryData?.roadmap}
-                hasMindMap={!!summaryData?.mind_map?.nodes?.length}
-                isChatLoading={isChatLoading}
-                sets={[
-                  ...(summaryData?.quiz?.length ? [{ id: 'quiz-set', name: `Quiz (${summaryData.quiz.length} questions)`, date: 'Generated', type: 'quiz' }] : []),
-                  ...(summaryData?.flashcards?.length ? [{ id: 'flashcard-set', name: `Flashcards (${summaryData.flashcards.length} cards)`, date: 'Generated', type: 'flashcards' }] : []),
-                  ...(summaryData?.roadmap ? [{ id: 'roadmap-set', name: `Learning Roadmap`, date: 'Generated', type: 'roadmap' }] : []),
-                ]}
-              />
 
-              {/* Mobile Learn Tools Toggle */}
-              <button
-                onClick={() => setIsMobileLearnOpen(!isMobileLearnOpen)}
-                className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-black text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-gray-800 transition-all"
-                aria-label="Open learning tools"
-              >
-                <GraduationCap className="h-6 w-6" />
-              </button>
+              {/* Mobile Study Tools (Hidden in Focus Mode) */}
+              {!isFocusMode && (
+                <>
+                  <button
+                    onClick={() => setIsMobileLearnOpen(!isMobileLearnOpen)}
+                    className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-black text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-gray-800 transition-all"
+                    aria-label="Open learning tools"
+                  >
+                    <GraduationCap className="h-6 w-6" />
+                  </button>
 
-              {/* Mobile Learn Tools Panel */}
-              <AnimatePresence>
-                {isMobileLearnOpen && (
-                  <>
-                    <motion.div 
-                      initial={{ opacity: 0 }} 
-                      animate={{ opacity: 1 }} 
-                      exit={{ opacity: 0 }}
-                      className="lg:hidden fixed inset-0 bg-black/20 z-40"
-                      onClick={() => setIsMobileLearnOpen(false)}
-                    />
-                    <motion.div 
-                      initial={{ y: "100%" }} 
-                      animate={{ y: 0 }} 
-                      exit={{ y: "100%" }}
-                      transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                      className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[70vh] overflow-y-auto"
-                    >
-                      <div className="p-1 flex justify-center">
-                        <div className="w-10 h-1 rounded-full bg-gray-200" />
-                      </div>
-                      <LearnTools 
-                        onToolClick={(id, v) => { handleToolClick(id, v); setIsMobileLearnOpen(false); }}
-                        hasQuiz={!!summaryData?.quiz?.length}
-                        hasFlashcards={!!summaryData?.flashcards?.length}
-                        hasRoadmap={!!summaryData?.roadmap}
-                        hasMindMap={!!summaryData?.mind_map?.nodes?.length}
-                        isChatLoading={isChatLoading}
-                        sets={[
-                          ...(summaryData?.quiz?.length ? [{ id: 'quiz-set', name: `Quiz (${summaryData.quiz.length} questions)`, date: 'Generated', type: 'quiz' }] : []),
-                          ...(summaryData?.flashcards?.length ? [{ id: 'flashcard-set', name: `Flashcards (${summaryData.flashcards.length} cards)`, date: 'Generated', type: 'flashcards' }] : []),
-                          ...(summaryData?.roadmap ? [{ id: 'roadmap-set', name: `Learning Roadmap`, date: 'Generated', type: 'roadmap' }] : []),
-                        ]}
-                        isMobile
-                      />
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+                  <AnimatePresence>
+                    {isMobileLearnOpen && (
+                      <>
+                        <motion.div 
+                          initial={{ opacity: 0 }} 
+                          animate={{ opacity: 1 }} 
+                          exit={{ opacity: 0 }}
+                          className="lg:hidden fixed inset-0 bg-black/20 z-40"
+                          onClick={() => setIsMobileLearnOpen(false)}
+                        />
+                        <motion.div 
+                          initial={{ y: "100%" }} 
+                          animate={{ y: 0 }} 
+                          exit={{ y: "100%" }}
+                          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                          className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[70vh] overflow-y-auto"
+                        >
+                          <div className="p-1 flex justify-center">
+                            <div className="w-10 h-1 rounded-full bg-gray-200" />
+                          </div>
+                          <LearnTools 
+                            onToolClick={(id, v) => { handleToolClick(id, v); setIsMobileLearnOpen(false); }}
+                            hasQuiz={!!summaryData?.quiz?.length}
+                            hasFlashcards={!!summaryData?.flashcards?.length}
+                            hasRoadmap={!!summaryData?.roadmap}
+                            hasMindMap={!!summaryData?.mind_map?.nodes?.length}
+                            isChatLoading={isChatLoading}
+                            sets={[
+                              ...(summaryData?.quiz?.length ? [{ id: 'quiz-set', name: `Quiz (${summaryData.quiz.length} questions)`, date: 'Generated', type: 'quiz' }] : []),
+                              ...(summaryData?.flashcards?.length ? [{ id: 'flashcard-set', name: `Flashcards (${summaryData.flashcards.length} cards)`, date: 'Generated', type: 'flashcards' }] : []),
+                              ...(summaryData?.roadmap ? [{ id: 'roadmap-set', name: `Learning Roadmap`, date: 'Generated', type: 'roadmap' }] : []),
+                            ]}
+                            isMobile
+                          />
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
             </motion.div>
             ) : activeView === "history" || activeView === "library" || activeView === "space" ? (
             <motion.div 
@@ -1467,163 +1939,21 @@ const Index = () => {
                 </div>
               )}
             </motion.div>
-          ) : activeView === "settings" ? (
-            <motion.div 
-              key="settings"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="max-w-4xl mx-auto py-16 px-6"
-            >
-              <h1 className="text-2xl font-bold text-foreground mb-8">Settings</h1>
-              
-              {!user ? (
-                <div className="text-center py-24">
-                  <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-gray-100">
-                    <UserIcon className="h-7 w-7 text-gray-200" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground mb-1">Sign in to continue</h3>
-                  <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">Log in to manage your account settings and data.</p>
-                  <Button onClick={() => (document.querySelector('[data-auth-trigger]') as HTMLElement)?.click()} className="rounded-xl font-semibold text-sm h-10 px-6 bg-black text-white hover:bg-gray-900">Sign In</Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="p-8 bg-white border border-gray-100 rounded-3xl shadow-sm space-y-6">
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Account Profile</h3>
-                      <div className="flex items-center gap-4 mb-4">
-                        <Avatar className="h-14 w-14 rounded-2xl border-2 border-white shadow-md">
-                          <AvatarImage src={user.avatar_url} />
-                          <AvatarFallback className="bg-black text-white text-lg font-bold rounded-2xl">
-                            {user.name?.charAt(0) || 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-base font-bold line-clamp-1">{user.name}</p>
-                          <p className="text-sm text-muted-foreground line-clamp-1">{user.email}</p>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => {
-                          setNewName(user.name);
-                          setIsProfileUpdateOpen(true);
-                        }} 
-                        className="w-full rounded-2xl h-11 font-medium text-sm border-gray-100 hover:bg-gray-50"
-                      >
-                        Manage Account
-                      </Button>
-                    </div>
-
-                    <div className="border-t pt-6">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Credits & Plan</h3>
-                      <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-3xl p-6 border border-gray-100 flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase text-gray-400 mb-1">Balance</p>
-                          <div className="flex items-center gap-2">
-                             <Coins className="h-5 w-5 text-amber-500 fill-amber-500" />
-                             <p className="text-xl font-bold">{credits ?? 0} Credits</p>
-                          </div>
-                        </div>
-                        <Button onClick={() => setIsTopUpOpen(true)} className="rounded-xl bg-black text-white px-4 font-semibold text-xs h-10 shadow-lg">Add Credits</Button>
-                      </div>
-                      <p className="text-xs font-medium text-muted-foreground text-center mt-4">Standard Plan — Active</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6 flex flex-col h-full bg-white border border-gray-100 rounded-3xl shadow-sm overflow-hidden min-h-[400px]">
-                    <div className="p-8 flex-1 flex flex-col">
-                       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-6">Activity Log</h3>
-                       <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin">
-                         {transactions.length > 0 ? (
-                           transactions.map((tx: any) => (
-                             <div key={tx.id} className="flex items-center justify-between p-4 bg-gray-50/50 border border-gray-100/50 rounded-2xl group hover:border-gray-200 transition-all">
-                               <div className="flex items-center gap-3">
-                                 <div className={cn(
-                                   "w-9 h-9 rounded-xl flex items-center justify-center transition-colors",
-                                   tx.amount > 0 ? "bg-green-100 text-green-600" : "bg-amber-100 text-amber-600"
-                                 )}>
-                                   <Coins className="h-4 w-4" />
-                                 </div>
-                                 <div>
-                                   <p className="text-xs font-semibold text-foreground capitalize group-hover:text-black transition-colors">
-                                     {tx.operation.replace('_', ' ')}
-                                   </p>
-                                   <p className="text-[10px] text-muted-foreground opacity-60">
-                                     {new Date(tx.created_at).toLocaleDateString()} at {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                   </p>
-                                 </div>
-                               </div>
-                               <span className={cn("text-xs font-bold", tx.amount > 0 ? "text-green-600" : "text-amber-600")}>
-                                 {tx.amount > 0 ? "+" : ""}{tx.amount}
-                               </span>
-                             </div>
-                           ))
-                         ) : (
-                           <div className="flex flex-col items-center justify-center h-full text-center py-20 opacity-20">
-                              <Coins className="h-12 w-12 mb-3" />
-                              <p className="text-xs font-medium">No activity recorded</p>
-                           </div>
-                         )}
-                       </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm space-y-4">
-                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Privacy & Data</h3>
-                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                           <Trash2 className="h-4 w-4 text-muted-foreground" />
-                           <span className="text-sm font-bold">Delete History</span>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={handleClearHistory}
-                          className="rounded-xl h-8 px-4 text-xs font-medium text-red-500 hover:bg-red-50"
-                        >
-                          Clear
-                        </Button>
-                     </div>
-                     <div className="flex items-center justify-between border-t pt-4">
-                        <div className="flex items-center gap-3">
-                           <Download className="h-4 w-4 text-muted-foreground" />
-                           <span className="text-sm font-bold">Export My Data</span>
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => {
-                            const data = JSON.stringify({ 
-                              user, 
-                              history: historyItems, 
-                              spaces,
-                              exportedAt: new Date().toISOString()
-                            }, null, 2);
-                            const blob = new Blob([data], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `youlearn-data-export.json`;
-                            a.click();
-                            toast.success("Downloading your data...");
-                          }}
-                          className="rounded-xl h-8 px-4 text-xs font-medium border-gray-100"
-                        >
-                          Download
-                        </Button>
-                     </div>
-                  </div>
-                </div>
-              )}
-            </motion.div>
           ) : (
             <motion.div 
               key="dashboard"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              className="pb-20"
             >
+              {/* Hero Section */}
+              <div className="max-w-4xl mx-auto px-6 pt-16 pb-8">
+                <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">
+                  Ready to learn, {user?.name?.split(' ')[0] || 'stranger'}?
+                </h1>
+              </div>
+
               <UrlInput 
                 onSubmit={handleSubmit} 
                 isLoading={isLoading} 
@@ -1632,87 +1962,104 @@ const Index = () => {
                 onStyleChange={setAnalysisStyle}
               />
               
-              <div className="max-w-4xl mx-auto px-6 pb-20">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
-                    <section>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-6">Recent Spaces</h3>
-                      {spaces.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-3">
-                          {spaces.slice(0, 3).map(space => (
-                            <button 
-                              key={space.id} 
-                              onClick={() => handleSidebarClick({ type: "Space", id: space.id, name: space.name })}
-                              className="w-full flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl hover:border-gray-200 transition-all text-left shadow-sm group"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 bg-gray-50 rounded-xl group-hover:bg-white transition-colors">
-                                   <FolderOpen className="h-4 w-4 text-gray-400" />
-                                </div>
-                                <span className="text-sm font-bold">{space.name}</span>
-                              </div>
-                              <span className="text-[10px] font-semibold text-muted-foreground">{space.videoIds.length} videos</span>
-                            </button>
-                          ))}
-                          <Button onClick={() => toast.info("Use the sidebar to create new spaces!")} variant="ghost" className="w-full h-12 rounded-2xl border border-dashed text-muted-foreground gap-2">
-                             <PlusCircle className="h-4 w-4" />
-                             Manage Spaces in Sidebar
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="bg-gray-50/50 rounded-3xl p-8 border border-dashed border-gray-200 text-center">
-                           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
-                              <PlusCircle className="h-6 w-6 text-gray-400" />
-                           </div>
-                           <p className="text-sm font-bold text-gray-600">Create your first space</p>
-                           <p className="text-xs text-gray-400 mt-1">Organize your learning by topics</p>
-                           <Button onClick={() => toast.info("Use the sidebar to create new spaces!")} variant="outline" className="mt-4 rounded-xl font-medium text-xs h-8">Add Space</Button>
-                        </div>
-                      )}
-                    </section>
-                    
-                    <section>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-6">Continue Learning</h3>
-                      <div className="space-y-3">
-                         {historyItems.slice(0, 3).map((item) => (
-                           <button 
-                             key={item.id} 
-                             onClick={() => handleLoadHistoryItem(item)}
-                             className="w-full flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-200 hover:shadow-sm transition-all text-left group"
-                           >
-                              <div className="w-14 h-10 bg-gray-100 rounded-xl overflow-hidden shrink-0 border border-gray-50">
-                                 <img 
-                                   src={`https://img.youtube.com/vi/${item.videoIds[0]}/default.jpg`} 
-                                   alt="" 
-                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                                 />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                 <p className="text-sm font-semibold truncate group-hover:text-black transition-colors">{item.title}</p>
-                                 <p className="text-xs text-muted-foreground mt-0.5">{getRelativeDate(item.date)}</p>
-                              </div>
-                              <ChevronRight className="h-4 w-4 text-gray-200 group-hover:text-gray-400 shrink-0 transition-colors" />
-                           </button>
-                         ))}
-                         {historyItems.length > 3 && (
-                           <Button onClick={() => setActiveView("history")} variant="link" className="w-full text-center text-xs font-medium text-muted-foreground">View all history</Button>
-                         )}
-                         {historyItems.length === 0 && (
-                           <div className="py-10 text-center">
-                              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-gray-100">
-                                 <HistoryIcon className="h-5 w-5 text-gray-300" />
-                              </div>
-                              <p className="text-sm font-medium text-gray-400">No recent activity</p>
-                              <p className="text-xs text-gray-300 mt-1">Your analyzed videos will show up here</p>
-                           </div>
-                         )}
+              <div className="max-w-4xl mx-auto px-6 mt-12 space-y-12">
+                 {/* Spaces Grid */}
+                 <section>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold">Spaces</h3>
+                      <button className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">View all</button>
+                    </div>
+                    {spaces.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {spaces.slice(0, 6).map(space => (
+                          <button 
+                            key={space.id} 
+                            onClick={() => handleSidebarClick({ type: "Space", id: space.id, name: space.name })}
+                            className="flex flex-col p-5 bg-white border border-gray-100 rounded-[32px] hover:border-gray-200 hover:shadow-md transition-all text-left shadow-sm group aspect-square justify-between"
+                          >
+                            <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
+                               <FolderOpen className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <span className="text-base font-bold block truncate">{space.name}</span>
+                              <span className="text-xs text-muted-foreground font-medium">{space.videoIds.length} items</span>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                    </section>
-                 </div>
+                    ) : (
+                      <div className="bg-gray-50/50 rounded-[40px] p-12 border border-dashed border-gray-200 text-center">
+                         <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
+                            <PlusCircle className="h-8 w-8 text-gray-200" />
+                         </div>
+                         <p className="text-base font-bold text-gray-600">Create your first space</p>
+                         <p className="text-sm text-gray-400 mt-1">Organize your learning by topics</p>
+                         <Button onClick={() => toast.info("Use the sidebar to create new spaces!")} variant="outline" className="mt-6 rounded-2xl font-bold text-sm h-10 px-6">Add Space</Button>
+                      </div>
+                    )}
+                 </section>
+
+                 {/* Recent Videos Row */}
+                 <section>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold">Recents</h3>
+                      <button onClick={() => setActiveView("history")} className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">View history</button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                       {historyItems.slice(0, 3).map((item) => (
+                         <button 
+                           key={item.id} 
+                           onClick={() => handleLoadHistoryItem(item)}
+                           className="flex flex-col bg-white rounded-[32px] overflow-hidden hover:shadow-lg transition-all text-left group border border-gray-50 shadow-sm"
+                         >
+                            <div className="aspect-video w-full bg-gray-100 overflow-hidden relative">
+                               <img 
+                                 src={`https://img.youtube.com/vi/${item.videoIds[0]}/maxresdefault.jpg`} 
+                                 alt="" 
+                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                               />
+                               <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                            <div className="p-5">
+                               <p className="text-sm font-bold truncate group-hover:text-black transition-colors">{item.title}</p>
+                               <div className="flex items-center gap-2 mt-2">
+                                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">{getRelativeDate(item.date)}</span>
+                                 <span className="w-1 h-1 rounded-full bg-gray-200" />
+                                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold truncate max-w-[100px]">{item.videoData?.channel}</span>
+                               </div>
+                            </div>
+                         </button>
+                       ))}
+                       {historyItems.length === 0 && (
+                         <div className="col-span-full py-12 text-center bg-gray-50/50 rounded-[40px] border border-dashed border-gray-200">
+                            <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
+                               <HistoryIcon className="h-8 w-8 text-gray-200" />
+                            </div>
+                            <p className="text-base font-bold text-gray-400">No recent activity</p>
+                            <Button onClick={() => setActiveView("dashboard")} variant="link" className="mt-2 text-xs font-semibold text-gray-300">Start learning something new</Button>
+                         </div>
+                       )}
+                    </div>
+                 </section>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      {!isFocusMode && (
+        <BottomNav 
+          activeView={activeView} 
+          onViewChange={(view) => {
+            if (view === "search-modal") {
+              setIsSearchModalOpen(true);
+            } else {
+              handleSidebarClick(view);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

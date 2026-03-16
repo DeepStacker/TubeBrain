@@ -8,8 +8,14 @@ from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
 
 # ──────────────────────────────────────────────
-# AUTH
+# USERS & AUTH
 # ──────────────────────────────────────────────
+
+class UserSettings(BaseModel):
+    expertise: str = Field(default="intermediate", pattern="^(beginner|intermediate|expert)$")
+    theme: str = Field(default="light", pattern="^(light|dark|system)$")
+    notifications_enabled: bool = True
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -33,6 +39,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     credits: Optional[CreditBalanceResponse] = None
+    settings: Optional[UserSettings] = None
 
     model_config = {"from_attributes": True}
 
@@ -51,6 +58,7 @@ class RegisterRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     avatar_url: Optional[str] = None
+    settings: Optional[UserSettings] = None
 
 
 class OAuthCallbackRequest(BaseModel):
@@ -181,14 +189,14 @@ class SpaceResponse(BaseModel):
     description: Optional[str] = None
     is_public: bool
     video_count: int = 0
-    video_ids: Optional[list[UUID]] = None
+    video_ids: Optional[list[str]] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class SpaceAddVideoRequest(BaseModel):
-    video_id: UUID
+    video_id: str
 
 
 # ──────────────────────────────────────────────
