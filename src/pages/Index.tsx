@@ -71,6 +71,7 @@ import {
   apiFetch, 
   videoApi, 
   getAuthToken,
+  setAuthToken,
   authApi,
   creditApi,
   paymentApi,
@@ -245,6 +246,20 @@ const Index = () => {
   }, [activeView, videoIds]);
 
   useEffect(() => {
+    // Handle OAuth redirect: read token from URL query params after server-side OAuth flow
+    const params = new URLSearchParams(window.location.search);
+    const oauthToken = params.get("token");
+    const oauthError = params.get("error");
+
+    if (oauthError) {
+      toast.error("Sign-in failed. Please try again.");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (oauthToken) {
+      setAuthToken(oauthToken);
+      // Clean up URL so the token doesn't stay in browser history
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
     fetchUserData();
   }, []);
 

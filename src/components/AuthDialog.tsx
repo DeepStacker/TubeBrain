@@ -48,7 +48,7 @@ export function AuthDialog({ onSuccess }: { onSuccess?: () => void }) {
   };
 
   const handleOAuth = (provider: string) => {
-    window.location.href = `${API_BASE_URL}/auth/${provider}/callback`;
+    window.location.href = `${API_BASE_URL}/auth/${provider}/authorize`;
   };
 
   return (

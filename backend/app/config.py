@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     LINKEDIN_CLIENT_SECRET: str = ""
 
     OAUTH_REDIRECT_BASE: str = "http://localhost:8000"
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # ── AI Providers ──
     GROQ_API_KEY: str = ""
