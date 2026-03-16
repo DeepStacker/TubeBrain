@@ -170,21 +170,21 @@ const SummaryDisplay = ({
   const activeChapterIndex = useMemo(() => findActiveChapterIndex(), [currentTime, timestamps]);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="space-y-8 pb-20">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="space-y-12 pb-32">
       {/* Overview Card */}
       {overview && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center">
-              <BookOpen className="h-4 w-4 text-green-600" />
+        <div className="bg-white rounded-[40px] border border-gray-100 p-8 lg:p-10 space-y-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center border border-gray-100">
+              <BookOpen className="h-5 w-5 text-black" />
             </div>
-            <h2 className="text-sm font-semibold text-foreground">Overview</h2>
+            <h2 className="text-xl font-bold text-foreground">Synthesis Overview</h2>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed">{overview}</p>
+          <p className="text-lg font-medium text-gray-500 leading-relaxed max-w-3xl">{overview}</p>
           {tags && tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="flex flex-wrap gap-2 pt-2">
               {tags.map((tag, i) => (
-                <span key={i} className="text-[10px] font-medium bg-gray-50 text-muted-foreground px-2.5 py-1 rounded-full border border-gray-100">
+                <span key={i} className="text-[10px] font-bold uppercase tracking-widest bg-gray-50 text-gray-400 px-3 py-1.5 rounded-full border border-gray-100">
                   {tag}
                 </span>
               ))}
@@ -193,104 +193,117 @@ const SummaryDisplay = ({
         </div>
       )}
 
-      {/* Key Points */}
-      {keyPoints && keyPoints.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
-              <Lightbulb className="h-4 w-4 text-amber-600" />
+      {/* Grid for Key Points and Takeaways */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Key Points */}
+        {keyPoints && keyPoints.length > 0 && (
+          <div className="bg-white rounded-[40px] border border-gray-100 p-8 space-y-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-100">
+                <Lightbulb className="h-5 w-5 text-amber-600" />
+              </div>
+              <h2 className="text-lg font-bold text-foreground">Critical Insights</h2>
             </div>
-            <h2 className="text-sm font-semibold text-foreground">Key Points</h2>
+            <div className="space-y-4">
+              {keyPoints.map((point, i) => (
+                <motion.div 
+                  key={i} 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.1 + 0.2 }}
+                  className="flex items-start gap-4 text-sm font-medium text-gray-500 leading-relaxed group/item"
+                >
+                  <span className="w-6 h-6 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-black text-black group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                    {i + 1}
+                  </span>
+                  {point}
+                </motion.div>
+              ))}
+            </div>
           </div>
-          <ul className="space-y-3">
-            {keyPoints.map((point, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground leading-relaxed">
-                <span className="w-5 h-5 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-semibold text-gray-400">
-                  {i + 1}
-                </span>
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        )}
 
-      {/* Takeaways */}
-      {takeaways && takeaways.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
-              <Target className="h-4 w-4 text-blue-600" />
+        {/* Takeaways */}
+        {takeaways && takeaways.length > 0 && (
+          <div className="bg-white rounded-[40px] border border-gray-100 p-8 space-y-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100">
+                <Target className="h-5 w-5 text-blue-600" />
+              </div>
+              <h2 className="text-lg font-bold text-foreground">Core Takeaways</h2>
             </div>
-            <h2 className="text-sm font-semibold text-foreground">Takeaways</h2>
+            <div className="space-y-4">
+              {takeaways.map((item, i) => (
+                <motion.div 
+                  key={i} 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.1 + 0.3 }}
+                  className="flex items-start gap-4 text-sm font-medium text-gray-500 leading-relaxed group/item"
+                >
+                  <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 group-hover/item:scale-150 transition-transform" />
+                  {item}
+                </motion.div>
+              ))}
+            </div>
           </div>
-          <ul className="space-y-3">
-            {takeaways.map((item, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground leading-relaxed">
-                <Star className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Learning Context */}
       {resolvedLearningContext && (resolvedLearningContext.why || resolvedLearningContext.whatToHowTo || resolvedLearningContext.bestWay) && (
-        <div className="bg-gradient-to-br from-indigo-50/50 to-purple-50/50 rounded-2xl border border-indigo-100/50 p-6 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center">
-              <Brain className="h-4 w-4 text-indigo-600" />
+        <div className="bg-black text-white rounded-[40px] p-10 space-y-8 shadow-2xl shadow-black/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 backdrop-blur-md">
+              <Brain className="h-5 w-5 text-white" />
             </div>
-            <h2 className="text-sm font-semibold text-foreground">Learning Context</h2>
+            <h2 className="text-xl font-bold">Strategic Context</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {resolvedLearningContext.why && (
-              <div className="bg-white/70 rounded-xl p-4 border border-indigo-100/30">
-                <h4 className="text-xs font-semibold text-indigo-600 mb-2 uppercase tracking-wider">Why Learn This</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">{resolvedLearningContext.why}</p>
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">The Purpose</h4>
+                <p className="text-sm font-medium text-white/70 leading-relaxed">{resolvedLearningContext.why}</p>
               </div>
             )}
             {resolvedLearningContext.whatToHowTo && (
-              <div className="bg-white/70 rounded-xl p-4 border border-indigo-100/30">
-                <h4 className="text-xs font-semibold text-indigo-600 mb-2 uppercase tracking-wider">What to How</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">{resolvedLearningContext.whatToHowTo}</p>
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Application</h4>
+                <p className="text-sm font-medium text-white/70 leading-relaxed">{resolvedLearningContext.whatToHowTo}</p>
               </div>
             )}
             {resolvedLearningContext.bestWay && (
-              <div className="bg-white/70 rounded-xl p-4 border border-indigo-100/30">
-                <h4 className="text-xs font-semibold text-indigo-600 mb-2 uppercase tracking-wider">Best Approach</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">{resolvedLearningContext.bestWay}</p>
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Methodology</h4>
+                <p className="text-sm font-medium text-white/70 leading-relaxed">{resolvedLearningContext.bestWay}</p>
               </div>
             )}
           </div>
         </div>
       )}
 
+      {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-6">
-          <TabsList className="bg-transparent p-0 gap-6 h-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10 pb-6 border-b border-gray-100">
+          <TabsList className="bg-gray-50/50 p-1 rounded-2xl border border-gray-100 h-12">
             <TabsTrigger 
               value="chapters" 
-              className="px-0 py-2 text-sm font-medium data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-green-500 rounded-none bg-transparent gap-2"
+              className="px-6 rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm"
             >
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
               Chapters
             </TabsTrigger>
             <TabsTrigger 
               value="transcripts" 
-              className="px-0 py-2 text-sm font-medium data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-foreground rounded-none bg-transparent gap-2"
+              className="px-6 rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm"
             >
-              <span className="text-muted-foreground text-xs">T</span>
-              Transcripts
+              Transcript
             </TabsTrigger>
             {flashcards && flashcards.length > 0 && (
               <TabsTrigger 
                 value="flashcards" 
-                className="px-0 py-2 text-sm font-medium data-[state=active]:text-foreground text-muted-foreground border-b-2 border-transparent data-[state=active]:border-purple-500 rounded-none bg-transparent gap-2"
+                className="px-6 rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm"
               >
-                <div className="w-2 h-2 bg-purple-500 rounded-full" />
-                Flashcards
+                Cards
               </TabsTrigger>
             )}
           </TabsList>
@@ -299,169 +312,158 @@ const SummaryDisplay = ({
              <button 
                onClick={() => setIsAutoScroll(!isAutoScroll)}
                className={cn(
-                 "flex items-center gap-2 text-xs font-medium transition-colors px-3 py-1.5 rounded-full border",
-                 isAutoScroll ? "text-foreground border-gray-200 bg-white" : "text-muted-foreground border-gray-100 hover:border-gray-200"
+                 "flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all px-4 py-2 rounded-xl border",
+                 isAutoScroll ? "bg-black text-white border-black" : "bg-white text-gray-400 border-gray-100 hover:border-gray-200"
                )}
              >
-                <ChevronDown className="h-3 w-3" />
                 Auto Scroll
              </button>
+             <div className="w-px h-4 bg-gray-100" />
              <button 
                onClick={handleCopy} 
-               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+               className="h-10 w-10 flex items-center justify-center bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-all shadow-sm"
+               title="Copy analysis"
              >
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-gray-400" />}
              </button>
           </div>
         </div>
 
-        {/* ─── CHAPTERS TAB ─── */}
-        <TabsContent value="chapters" className="mt-0 outline-none space-y-8">
-          {timestamps?.map((ts, i) => (
-            <motion.div 
-              key={i}
-              ref={i === activeChapterIndex ? activeLineRef : null}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className={cn(
-                "group cursor-pointer p-4 -mx-4 rounded-2xl transition-all",
-                i === activeChapterIndex ? "bg-gray-50" : "hover:bg-gray-50/50"
-              )}
-              onClick={() => onTimestampClick && onTimestampClick(parseTimeToSeconds(ts.time))}
-              role="button"
-              aria-label={`Jump to chapter: ${ts.label} at ${ts.time}`}
-            >
-              <span className={cn(
-                "text-xs font-medium mb-2 block transition-colors",
-                i === activeChapterIndex ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
-              )}>{ts.time}</span>
-              <h3 className={cn(
-                "text-lg font-semibold mb-2 transition-colors",
-                i === activeChapterIndex ? "text-foreground" : "group-hover:text-foreground"
-              )}>{ts.label}</h3>
-              <p className="text-muted-foreground leading-relaxed text-sm">
-                {keyPoints[i] || overview.slice(0, 200)}
-              </p>
-            </motion.div>
-          ))}
-
-          {!timestamps?.length && (
-            <div className="py-16 text-center">
-              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
-                <Clock className="h-5 w-5 text-gray-300" />
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">No chapters detected</p>
-              <p className="text-xs text-gray-400 mt-1">The summary above provides a full overview of the content.</p>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ─── TRANSCRIPTS TAB ─── */}
-        <TabsContent value="transcripts" className="mt-0 outline-none">
-          {transcript_segments ? (
-            <div className="space-y-4">
-              {transcript_segments.map((seg, i) => {
-                const isActive = i === activeTranscriptIndex;
-                const hh = Math.floor(seg.start / 3600);
-                const mm = Math.floor((seg.start % 3600) / 60);
-                const ss = Math.floor(seg.start % 60);
-                const timeStr = hh > 0 
-                  ? `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
-                  : `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-
-                return (
-                  <div
-                    key={i}
-                    ref={isActive ? activeLineRef : null}
-                    onClick={() => onTimestampClick && onTimestampClick(seg.start)}
-                    className={cn(
-                      "group cursor-pointer p-3 -mx-3 rounded-2xl transition-all",
-                      isActive ? "bg-blue-50 text-blue-700 font-bold shadow-sm" : "hover:bg-gray-50"
-                    )}
-                  >
-                    <span className={cn(
-                      "text-[10px] font-semibold mb-1 block",
-                      isActive ? "text-blue-600" : "text-muted-foreground group-hover:text-foreground"
-                    )}>[{timeStr}]</span>
-                    <p className="text-sm leading-relaxed">{seg.text}</p>
-                  </div>
-                );
-              })}
-            </div>
-          ) : transcript ? (
-            <div className="space-y-4">
-              {transcript.split("\n").map((line, i) => {
-                const match = line.match(/^\[(\d+:\d+)\]\s*(.*)$/);
-                const isActive = i === activeTranscriptIndex;
-                if (match) {
-                  return (
-                    <div
-                      key={i}
-                      ref={isActive ? activeLineRef : null}
-                      onClick={() => onTimestampClick && onTimestampClick(parseTimeToSeconds(match[1]))}
-                      className={cn(
-                        "group cursor-pointer p-3 -mx-3 rounded-2xl transition-all",
-                        isActive ? "bg-blue-50 text-blue-700 font-bold shadow-sm" : "hover:bg-gray-50"
-                      )}
-                    >
-                      <span className={cn(
-                        "text-[10px] font-semibold mb-1 block",
-                        isActive ? "text-blue-600" : "text-muted-foreground group-hover:text-foreground"
-                      )}>{match[1]}</span>
-                      <p className="text-sm leading-relaxed">{match[2]}</p>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            {/* ─── CHAPTERS TAB ─── */}
+            <TabsContent value="chapters" className="mt-0 outline-none space-y-6">
+              {timestamps?.map((ts, i) => (
+                <motion.div 
+                  key={i}
+                  ref={i === activeChapterIndex ? activeLineRef : null}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className={cn(
+                    "group relative pl-8 pb-8 last:pb-0 border-l-2 transition-all",
+                    i === activeChapterIndex ? "border-black" : "border-gray-100 hover:border-gray-300"
+                  )}
+                  onClick={() => onTimestampClick && onTimestampClick(parseTimeToSeconds(ts.time))}
+                  role="button"
+                >
+                  <div className={cn(
+                    "absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 transition-all",
+                    i === activeChapterIndex ? "bg-black border-black scale-110 shadow-lg shadow-black/20" : "bg-white border-gray-200 group-hover:border-gray-400"
+                  )} />
+                  
+                  <div className={cn(
+                    "p-6 rounded-[32px] border transition-all",
+                    i === activeChapterIndex ? "bg-white border-gray-100 shadow-xl shadow-black/5" : "bg-white border-transparent hover:border-gray-100"
+                  )}>
+                    <div className="flex items-center gap-3 mb-3">
+                       <span className={cn(
+                         "px-3 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase transition-colors",
+                         i === activeChapterIndex ? "bg-black text-white" : "bg-gray-100 text-gray-400 group-hover:text-gray-600"
+                       )}>{ts.time}</span>
+                       <h3 className="text-lg font-bold text-foreground">{ts.label}</h3>
                     </div>
-                  );
-                }
-                return <p key={i} className="text-foreground text-sm leading-relaxed">{line}</p>;
-              })}
-            </div>
-          ) : (
-            <div className="py-16 text-center">
-              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
-                <FileText className="h-5 w-5 text-gray-300" />
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">Transcript unavailable</p>
-              <p className="text-xs text-gray-400 mt-1">This video may not have captions or subtitles.</p>
-            </div>
-          )}
-        </TabsContent>
+                    <p className="text-sm font-medium text-gray-400 leading-relaxed max-w-2xl">
+                      {keyPoints[i] || overview.slice(0, 200)}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
 
-        {/* ─── FLASHCARDS TAB ─── */}
-        <TabsContent value="flashcards" className="mt-0 outline-none">
-          {flashcards ? (
-            <Suspense fallback={<div className="py-16 text-center text-muted-foreground text-sm">Loading flashcards...</div>}>
-              <Flashcards cards={flashcards} />
-            </Suspense>
-          ) : (
-            <div className="py-16 text-center">
-               <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
-                 <Brain className="h-5 w-5 text-gray-300" />
-               </div>
-               <p className="text-sm font-medium text-muted-foreground">Study Cards Unavailable</p>
-               <p className="text-xs text-gray-400 mt-1">Try re-analyzing this video to generate interactive cards.</p>
-            </div>
-          )}
-        </TabsContent>
+              {!timestamps?.length && (
+                <div className="py-24 text-center bg-gray-50/50 rounded-[40px] border border-dashed border-gray-200">
+                  <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-gray-100">
+                    <Clock className="h-8 w-8 text-gray-200" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-400">Chapters Missing</p>
+                  <p className="text-sm text-gray-300 mt-2 max-w-[240px] mx-auto leading-relaxed">We couldn't detect timestamps for this video. Use the overview above.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ─── TRANSCRIPTS TAB ─── */}
+            <TabsContent value="transcripts" className="mt-0 outline-none">
+              {transcript_segments ? (
+                <div className="space-y-2">
+                  {transcript_segments.map((seg, i) => {
+                    const isActive = i === activeTranscriptIndex;
+                    const hh = Math.floor(seg.start / 3600);
+                    const mm = Math.floor((seg.start % 3600) / 60);
+                    const ss = Math.floor(seg.start % 60);
+                    const timeStr = hh > 0 
+                      ? `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+                      : `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+
+                    return (
+                      <div
+                        key={i}
+                        ref={isActive ? activeLineRef : null}
+                        onClick={() => onTimestampClick && onTimestampClick(seg.start)}
+                        className={cn(
+                          "group cursor-pointer p-4 rounded-2xl transition-all flex gap-6 items-start",
+                          isActive ? "bg-black text-white shadow-xl shadow-black/10 scale-[1.02]" : "hover:bg-gray-50 bg-transparent"
+                        )}
+                      >
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest shrink-0 mt-1 w-12",
+                          isActive ? "text-white/50" : "text-gray-300"
+                        )}>{timeStr}</span>
+                        <p className={cn(
+                          "text-sm font-medium leading-relaxed",
+                          isActive ? "text-white" : "text-gray-500"
+                        )}>{seg.text}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-24 text-center bg-gray-50/50 rounded-[40px] border border-dashed border-gray-200">
+                  <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-gray-100">
+                    <FileText className="h-8 w-8 text-gray-200" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-400">Transcript Unavailable</p>
+                  <p className="text-sm text-gray-300 mt-2 max-w-[240px] mx-auto leading-relaxed">No text fallback found for this content.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ─── FLASHCARDS TAB ─── */}
+            <TabsContent value="flashcards" className="mt-0 outline-none">
+              {flashcards ? (
+                <Suspense fallback={<div className="py-24 text-center">
+                  <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin mx-auto" />
+                </div>}>
+                  <Flashcards cards={flashcards} />
+                </Suspense>
+              ) : null}
+            </TabsContent>
+          </motion.div>
+        </AnimatePresence>
       </Tabs>
 
-      {/* Other Sections (Roadmap, Quiz, etc.) */}
+      {/* Roadmap & Global Tools Sections */}
       {(roadmap || quiz || resolvedMindMap) && (
-        <div className="mt-20 pt-12 border-t space-y-20">
+        <div className="space-y-24 mt-20">
            {roadmap && (
-             <section id="roadmap">
-                <div className="flex items-center gap-3 mb-8">
-                   <div className="w-10 h-10 rounded-2xl bg-purple-50 flex items-center justify-center">
-                      <Rocket className="h-5 w-5 text-purple-600" />
+             <section id="roadmap" className="space-y-10">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 rounded-3xl bg-purple-50 flex items-center justify-center border border-purple-100">
+                      <Rocket className="h-6 w-6 text-purple-600" />
                    </div>
-                   <h3 className="text-2xl font-bold">Mastery Roadmap</h3>
+                   <h3 className="text-2xl font-black text-foreground">Strategic Mastery Path</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                    {roadmap.steps.map((step, i) => (
-                     <div key={i} className="p-6 rounded-3xl border bg-white shadow-sm hover:shadow-md transition-all">
-                        <span className="text-xs font-semibold text-purple-600 mb-2 block tracking-wider uppercase">Step {step.step}</span>
-                        <h4 className="text-lg font-bold mb-3">{step.task}</h4>
-                        <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
+                     <div key={i} className="p-8 rounded-[40px] border border-gray-100 bg-white shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                        <span className="text-[10px] font-black text-purple-600 mb-4 block tracking-[0.2em] uppercase">Stage {step.step}</span>
+                        <h4 className="text-xl font-bold mb-4">{step.task}</h4>
+                        <p className="text-sm font-medium text-gray-400 leading-relaxed">{step.description}</p>
                      </div>
                    ))}
                 </div>
@@ -469,30 +471,34 @@ const SummaryDisplay = ({
            )}
 
            {quiz && quiz.length > 0 && (
-             <section id="quiz">
-                <div className="flex items-center gap-3 mb-8">
-                   <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center">
-                      <Brain className="h-5 w-5 text-red-500" />
+             <section id="quiz" className="space-y-10">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 rounded-3xl bg-red-50 flex items-center justify-center border border-red-100">
+                      <Brain className="h-6 w-6 text-red-500" />
                    </div>
-                   <h3 className="text-2xl font-bold">Evaluation Quiz</h3>
+                   <h3 className="text-2xl font-black text-foreground">Interactive Assessment</h3>
                 </div>
-                <Suspense fallback={<div className="p-8 text-center text-muted-foreground text-sm">Loading quiz...</div>}>
-                  <QuizTab quiz={quiz} />
-                </Suspense>
+                <div className="rounded-[40px] border border-gray-100 bg-white overflow-hidden shadow-sm">
+                   <Suspense fallback={<div className="p-10 text-center text-gray-300">Loading evaluation...</div>}>
+                     <QuizTab quiz={quiz} />
+                   </Suspense>
+                </div>
              </section>
            )}
 
            {resolvedMindMap && resolvedMindMap.nodes && resolvedMindMap.nodes.length > 0 && (
-              <section id="mindmap">
-                 <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center">
-                       <Map className="h-5 w-5 text-blue-500" />
+              <section id="mindmap" className="space-y-10">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-3xl bg-blue-50 flex items-center justify-center border border-blue-100">
+                       <Map className="h-6 w-6 text-blue-500" />
                     </div>
-                    <h3 className="text-2xl font-bold">Mind Map</h3>
+                    <h3 className="text-2xl font-black text-foreground">Cognitive Mind Map</h3>
                  </div>
-                 <Suspense fallback={<div className="p-8 text-center text-muted-foreground text-sm">Loading mind map...</div>}>
-                   <MindMapTab mindMap={resolvedMindMap} />
-                 </Suspense>
+                 <div className="h-[600px] border border-gray-100 bg-gray-50/50 rounded-[40px] overflow-hidden shadow-inner">
+                    <Suspense fallback={<div className="h-full flex items-center justify-center text-gray-300">Mapping logic...</div>}>
+                      <MindMapTab mindMap={resolvedMindMap} />
+                    </Suspense>
+                 </div>
               </section>
             )}
         </div>

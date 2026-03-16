@@ -1,8 +1,9 @@
 """Authentication API routes — OAuth, JWT, email login."""
 
-from urllib.parse import urlencode
+import secrets
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +59,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     )
     db.add(user)
     await db.flush()
+    await db.commit()
 
     # Initialize credits
     await get_credit_balance(db, user.id)
@@ -120,24 +122,14 @@ async def google_oauth_callback(req: OAuthCallbackRequest, db: AsyncSession = De
 
         user_info = user_resp.json()
 
-    # Find or create user
-    result = await db.execute(select(User).where(User.email == user_info["email"]))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(
-            email=user_info["email"],
-            name=user_info.get("name", user_info["email"]),
-            avatar_url=user_info.get("picture"),
-            auth_provider="google",
-            auth_provider_id=user_info["id"],
-        )
-        db.add(user)
-        await db.flush()
-        await get_credit_balance(db, user.id)
-    else:
-        # Update avatar on each login
-        user.avatar_url = user_info.get("picture", user.avatar_url)
+    user = await _upsert_oauth_user(
+        db,
+        email=user_info["email"],
+        name=user_info.get("name", user_info["email"]),
+        avatar_url=user_info.get("picture"),
+        provider="google",
+        provider_id=user_info["id"],
+    )
 
     return TokenResponse(
         access_token=create_access_token(str(user.id)),
@@ -186,20 +178,14 @@ async def github_oauth_callback(req: OAuthCallbackRequest, db: AsyncSession = De
     if not primary_email:
         raise HTTPException(status_code=400, detail="No primary email on GitHub account")
 
-    result = await db.execute(select(User).where(User.email == primary_email))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(
-            email=primary_email,
-            name=user_info.get("name") or user_info.get("login", primary_email),
-            avatar_url=user_info.get("avatar_url"),
-            auth_provider="github",
-            auth_provider_id=str(user_info["id"]),
-        )
-        db.add(user)
-        await db.flush()
-        await get_credit_balance(db, user.id)
+    user = await _upsert_oauth_user(
+        db,
+        email=primary_email,
+        name=user_info.get("name") or user_info.get("login", primary_email),
+        avatar_url=user_info.get("avatar_url"),
+        provider="github",
+        provider_id=str(user_info["id"]),
+    )
 
     return TokenResponse(
         access_token=create_access_token(str(user.id)),
@@ -252,22 +238,14 @@ async def linkedin_oauth_callback(req: OAuthCallbackRequest, db: AsyncSession = 
     avatar = profile.get("picture")
     linkedin_id = profile.get("sub", "")
 
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(
-            email=email,
-            name=name,
-            avatar_url=avatar,
-            auth_provider="linkedin",
-            auth_provider_id=linkedin_id,
-        )
-        db.add(user)
-        await db.flush()
-        await get_credit_balance(db, user.id)
-    else:
-        user.avatar_url = avatar or user.avatar_url
+    user = await _upsert_oauth_user(
+        db,
+        email=email,
+        name=name,
+        avatar_url=avatar,
+        provider="linkedin",
+        provider_id=linkedin_id,
+    )
 
     return TokenResponse(
         access_token=create_access_token(str(user.id)),
@@ -323,6 +301,11 @@ async def patch_me(
 # SERVER-SIDE OAUTH FLOW (browser-initiated)
 # ──────────────────────────────────────────────
 
+from urllib.parse import urlencode
+import secrets
+from typing import Optional
+from fastapi import Request, Response
+
 def _frontend_redirect(user: User, access_token: str, refresh_token: str) -> RedirectResponse:
     """Redirect browser to the frontend with JWT tokens in query params."""
     params = urlencode({
@@ -333,22 +316,54 @@ def _frontend_redirect(user: User, access_token: str, refresh_token: str) -> Red
     return RedirectResponse(url=f"{settings.FRONTEND_URL}?{params}")
 
 
+async def _upsert_oauth_user(db: AsyncSession, email: str, name: str, avatar_url: Optional[str], provider: str, provider_id: str) -> User:
+    """Helper to find or create a user from OAuth info."""
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            email=email,
+            name=name,
+            avatar_url=avatar_url,
+            auth_provider=provider,
+            auth_provider_id=provider_id,
+        )
+        db.add(user)
+        await db.flush()
+        await get_credit_balance(db, user.id)
+    else:
+        user.name = name or user.name
+        user.avatar_url = avatar_url or user.avatar_url
+    
+    await db.commit()
+    return user
+
+
 @router.get("/google/authorize")
-async def google_authorize():
+async def google_authorize(response: Response):
     """Redirect the browser to Google's OAuth authorization page."""
+    state = secrets.token_urlsafe(32)
+    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite="lax")
+    
     params = urlencode({
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": f"{settings.OAUTH_REDIRECT_BASE}/api/auth/google/callback",
         "scope": "openid email profile",
         "response_type": "code",
         "access_type": "offline",
+        "state": state,
     })
     return RedirectResponse(url=f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
 
 
 @router.get("/google/callback")
-async def google_oauth_get_callback(code: str, db: AsyncSession = Depends(get_db)):
+async def google_oauth_get_callback(request: Request, code: str, state: str, db: AsyncSession = Depends(get_db)):
     """Handle Google OAuth redirect — exchange code, upsert user, redirect to frontend."""
+    cookie_state = request.cookies.get("oauth_state")
+    if not cookie_state or cookie_state != state:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=csrf_detected")
+
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -365,7 +380,6 @@ async def google_oauth_get_callback(code: str, db: AsyncSession = Depends(get_db
             return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=oauth_failed")
 
         tokens = token_resp.json()
-
         user_resp = await client.get(
             "https://www.googleapis.com/oauth2/v2/userinfo",
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
@@ -376,44 +390,45 @@ async def google_oauth_get_callback(code: str, db: AsyncSession = Depends(get_db
 
         user_info = user_resp.json()
 
-    result = await db.execute(select(User).where(User.email == user_info["email"]))
-    user = result.scalar_one_or_none()
+    user = await _upsert_oauth_user(
+        db,
+        email=user_info["email"],
+        name=user_info.get("name", user_info["email"]),
+        avatar_url=user_info.get("picture"),
+        provider="google",
+        provider_id=user_info["id"],
+    )
 
-    if not user:
-        user = User(
-            email=user_info["email"],
-            name=user_info.get("name", user_info["email"]),
-            avatar_url=user_info.get("picture"),
-            auth_provider="google",
-            auth_provider_id=user_info["id"],
-        )
-        db.add(user)
-        await db.flush()
-        await get_credit_balance(db, user.id)
-    else:
-        user.avatar_url = user_info.get("picture", user.avatar_url)
-
-    await db.commit()
-    return _frontend_redirect(
+    response = _frontend_redirect(
         user,
         create_access_token(str(user.id)),
         create_refresh_token(str(user.id)),
     )
+    response.delete_cookie("oauth_state")
+    return response
 
 
 @router.get("/github/authorize")
-async def github_authorize():
+async def github_authorize(response: Response):
     """Redirect the browser to GitHub's OAuth authorization page."""
+    state = secrets.token_urlsafe(32)
+    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite="lax")
+    
     params = urlencode({
         "client_id": settings.GITHUB_CLIENT_ID,
         "scope": "user:email",
+        "state": state,
     })
     return RedirectResponse(url=f"https://github.com/login/oauth/authorize?{params}")
 
 
 @router.get("/github/callback")
-async def github_oauth_get_callback(code: str, db: AsyncSession = Depends(get_db)):
+async def github_oauth_get_callback(request: Request, code: str, state: str, db: AsyncSession = Depends(get_db)):
     """Handle GitHub OAuth redirect — exchange code, upsert user, redirect to frontend."""
+    cookie_state = request.cookies.get("oauth_state")
+    if not cookie_state or cookie_state != state:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=csrf_detected")
+
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://github.com/login/oauth/access_token",
@@ -453,46 +468,47 @@ async def github_oauth_get_callback(code: str, db: AsyncSession = Depends(get_db
     if not primary_email:
         return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=no_email")
 
-    result = await db.execute(select(User).where(User.email == primary_email))
-    user = result.scalar_one_or_none()
+    user = await _upsert_oauth_user(
+        db,
+        email=primary_email,
+        name=user_info.get("name") or user_info.get("login", primary_email),
+        avatar_url=user_info.get("avatar_url"),
+        provider="github",
+        provider_id=str(user_info["id"]),
+    )
 
-    if not user:
-        user = User(
-            email=primary_email,
-            name=user_info.get("name") or user_info.get("login", primary_email),
-            avatar_url=user_info.get("avatar_url"),
-            auth_provider="github",
-            auth_provider_id=str(user_info["id"]),
-        )
-        db.add(user)
-        await db.flush()
-        await get_credit_balance(db, user.id)
-    else:
-        user.avatar_url = user_info.get("avatar_url", user.avatar_url)
-
-    await db.commit()
-    return _frontend_redirect(
+    response = _frontend_redirect(
         user,
         create_access_token(str(user.id)),
         create_refresh_token(str(user.id)),
     )
+    response.delete_cookie("oauth_state")
+    return response
 
 
 @router.get("/linkedin/authorize")
-async def linkedin_authorize():
+async def linkedin_authorize(response: Response):
     """Redirect the browser to LinkedIn's OAuth authorization page."""
+    state = secrets.token_urlsafe(32)
+    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite="lax")
+    
     params = urlencode({
         "response_type": "code",
         "client_id": settings.LINKEDIN_CLIENT_ID,
         "redirect_uri": f"{settings.OAUTH_REDIRECT_BASE}/api/auth/linkedin/callback",
         "scope": "openid profile email",
+        "state": state,
     })
     return RedirectResponse(url=f"https://www.linkedin.com/oauth/v2/authorization?{params}")
 
 
 @router.get("/linkedin/callback")
-async def linkedin_oauth_get_callback(code: str, db: AsyncSession = Depends(get_db)):
+async def linkedin_oauth_get_callback(request: Request, code: str, state: str, db: AsyncSession = Depends(get_db)):
     """Handle LinkedIn OAuth redirect — exchange code, upsert user, redirect to frontend."""
+    cookie_state = request.cookies.get("oauth_state")
+    if not cookie_state or cookie_state != state:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=csrf_detected")
+
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://www.linkedin.com/oauth/v2/accessToken",
@@ -524,35 +540,20 @@ async def linkedin_oauth_get_callback(code: str, db: AsyncSession = Depends(get_
 
         profile = profile_resp.json()
 
-    email = profile.get("email")
-    if not email:
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=no_email")
+    user = await _upsert_oauth_user(
+        db,
+        email=profile.get("email"),
+        name=profile.get("name", profile.get("email")),
+        avatar_url=profile.get("picture"),
+        provider="linkedin",
+        provider_id=profile.get("sub", ""),
+    )
 
-    name = profile.get("name", email)
-    avatar = profile.get("picture")
-    linkedin_id = profile.get("sub", "")
-
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(
-            email=email,
-            name=name,
-            avatar_url=avatar,
-            auth_provider="linkedin",
-            auth_provider_id=linkedin_id,
-        )
-        db.add(user)
-        await db.flush()
-        await get_credit_balance(db, user.id)
-    else:
-        user.avatar_url = avatar or user.avatar_url
-
-    await db.commit()
-    return _frontend_redirect(
+    response = _frontend_redirect(
         user,
         create_access_token(str(user.id)),
         create_refresh_token(str(user.id)),
     )
+    response.delete_cookie("oauth_state")
+    return response
 
