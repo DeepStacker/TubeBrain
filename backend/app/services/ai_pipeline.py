@@ -200,7 +200,8 @@ Return ONLY valid JSON (no markdown, no code blocks) with this EXACT structure:
   "flashcards": [
     {{
       "front": "Key concept or question",
-      "back": "Detailed explanation or answer"
+      "back": "Detailed explanation or answer",
+      "hint": "A subtle, non-giving-away hint to nudge the user's memory"
     }}
   ],
   "podcast": {{
@@ -243,6 +244,7 @@ async def synthesize_content(
     model: str = None,
     minimal_mode: bool = False,
     tools: Optional[list[str]] = None,
+    existing_data: Optional[str] = None,
 ) -> dict:
     """Generate structured learning content from a transcript using AI."""
     provider = provider or settings.DEFAULT_AI_PROVIDER
@@ -280,6 +282,10 @@ async def synthesize_content(
         # Override for targeted generation
         tool_instruction = f"\n\nCRITICAL: Generate ONLY the following JSON keys: {', '.join(tools)}. Skip all other keys."
         system_prompt += tool_instruction
+
+    if existing_data:
+        context_instruction = f"\n\nEXISTING CONTENT DISCOVERY:\nThe following items already exist for these tools. Generate NEW, UNIQUE, and COMPLEMENTARY items that do not repeat the following:\n{existing_data}"
+        system_prompt += context_instruction
 
     # Truncate transcript to fit context window
     max_transcript_tokens = 12000

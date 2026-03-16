@@ -38,6 +38,8 @@ export default function AnalysisPage() {
     setIsChatOpen,
     contextSnippet,
     setContextSnippet,
+    aiExplanation,
+    setAiExplanation,
     handleTimestampClick,
     handleToolClick,
     handleGenerateTool,
@@ -324,6 +326,9 @@ export default function AnalysisPage() {
                   learningContext={summaryData?.learning_context}
                   onTimestampClick={handleTimestampClick}
                   timestamps={summaryData?.timestamps}
+                  onAIAction={handleToolClick}
+                  aiExplanation={aiExplanation}
+                  onClearExplanation={() => setAiExplanation(null)}
                   sets={sets}
                 />
               </div>
@@ -398,6 +403,9 @@ export default function AnalysisPage() {
                     learningContext={summaryData?.learning_context}
                     onTimestampClick={handleTimestampClick}
                     timestamps={summaryData?.timestamps}
+                    onAIAction={handleToolClick}
+                    aiExplanation={aiExplanation}
+                    onClearExplanation={() => setAiExplanation(null)}
                     sets={sets}
                   />
                 </motion.div>

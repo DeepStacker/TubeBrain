@@ -25,6 +25,8 @@ interface AnalysisContextValue {
   setCurrentTime: (time: number) => void;
   contextSnippet: string | null;
   setContextSnippet: (snippet: string | null) => void;
+  aiExplanation: string | null;
+  setAiExplanation: (explanation: string | null) => void;
   generatingTools: string[];
   handleSubmit: (urls: string[], options?: any) => Promise<void>;
   handleSendMessage: (content: string, forcedContext?: string | null, toolId?: string | null) => Promise<void>;
@@ -62,6 +64,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [contextSnippet, setContextSnippet] = useState<string | null>(null);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [generatingTools, setGeneratingTools] = useState<string[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [analysisStyle, setAnalysisStyle] = useState("");
@@ -250,6 +253,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setChatMessages(updatedMessages);
     setIsChatLoading(true);
     setContextSnippet(null);
+    if (toolId === 'explain') setAiExplanation("");
 
     try {
       if (activeAnalysisId) {
@@ -296,6 +300,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
                     newChat[newChat.length - 1].content = assistantMsgContent;
                     return newChat;
                   });
+                  if (toolId === 'explain') setAiExplanation(assistantMsgContent);
                 }
               } catch (e) {
                 logger.warn("Error parsing chunk", e);
@@ -326,7 +331,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
   }, [activeAnalysisId, chatMessages, contextSnippet, videoIds, setIsChatOpen, setChatMessages, setIsChatLoading, setContextSnippet]);
 
-  const handleGenerateTool = useCallback(async (toolId: string) => {
+  const handleGenerateTool = useCallback(async (toolId: string, append: boolean = false) => {
     if (!activeAnalysisId) return;
     
     setGeneratingTools(prev => [...prev, toolId]);
@@ -350,7 +355,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const backendToolType = toolTypeMap[toolId];
       if (!backendToolType) return;
 
-      const res = await analysisApi.generateTool(activeAnalysisId, backendToolType);
+      const res = await analysisApi.generateTool(activeAnalysisId, backendToolType, append);
       if (res.ok) {
         const updatedAnalysis = await res.json();
         
@@ -362,7 +367,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           };
         });
         
-        toast.success(`${toolId.charAt(0).toUpperCase() + toolId.slice(1)} generated!`);
+        toast.success(append ? `Generated more ${toolId}!` : `${toolId.charAt(0).toUpperCase() + toolId.slice(1)} generated!`);
         refreshHistory();
       } else {
         toast.error(`Failed to generate ${toolId}`);
@@ -597,6 +602,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setCurrentTime,
         contextSnippet,
         setContextSnippet,
+        aiExplanation,
+        setAiExplanation,
         generatingTools,
         handleSubmit,
         handleSendMessage,

@@ -59,7 +59,7 @@ interface LearnToolsProps {
   hasFlashcards?: boolean;
   hasRoadmap?: boolean;
   hasMindMap?: boolean;
-  onGenerate?: (toolId: string) => void;
+  onGenerate?: (toolId: string, append?: boolean) => void;
   generatingTools?: string[];
   quizData?: QuizQuestion[];
   roadmapData?: { title: string; steps: RoadmapStep[] };
@@ -78,6 +78,8 @@ interface LearnToolsProps {
   learningContext?: LearningContext;
   onTimestampClick?: (seconds: number) => void;
   timestamps?: Timestamp[];
+  aiExplanation?: string | null;
+  onClearExplanation?: () => void;
   onMaximize?: () => void;
   isMaximized?: boolean;
 }
@@ -109,7 +111,9 @@ const LearnTools = ({
   onTimestampClick,
   timestamps,
   onMaximize,
-  isMaximized
+  isMaximized,
+  aiExplanation,
+  onClearExplanation,
 }: LearnToolsProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [askInput, setAskInput] = useState("");
@@ -302,7 +306,14 @@ const LearnTools = ({
         return flashcardsData ? (
           <Suspense fallback={<div className="p-8 text-center text-gray-400">Loading flashcards...</div>}>
              <div className="scale-[0.85] origin-top -mt-4">
-                <Flashcards cards={flashcardsData} />
+                <Flashcards 
+                  cards={flashcardsData} 
+                  onAIAction={onAIAction}
+                  onGenerateMore={() => onGenerate?.('flashcards', true)}
+                  isGenerating={generatingTools.includes('flashcards')}
+                  aiExplanation={aiExplanation}
+                  onClearExplanation={onClearExplanation}
+                />
              </div>
           </Suspense>
         ) : null;
