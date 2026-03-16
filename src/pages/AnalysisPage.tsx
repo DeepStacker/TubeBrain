@@ -42,11 +42,14 @@ export default function AnalysisPage() {
     setAiExplanation,
     quizAIExplanation,
     setQuizAIExplanation,
+    roadmapAIExplanation,
+    setRoadmapAIExplanation,
     handleTimestampClick,
     handleToolClick,
     handleGenerateTool,
     handleAddToSpace,
-    loadAnalysis
+    loadAnalysis,
+    clearExplanation
   } = useAnalysisContext();
 
   const { isFocusMode, setIsFocusMode, isVideoMinimized, setIsVideoMinimized } = useUIContext();
@@ -331,10 +334,8 @@ export default function AnalysisPage() {
                   onAIAction={handleToolClick}
                   aiExplanation={aiExplanation}
                   quizAIExplanation={quizAIExplanation}
-                  onClearExplanation={() => {
-                    setAiExplanation(null);
-                    setQuizAIExplanation(null);
-                  }}
+                  roadmapAIExplanation={roadmapAIExplanation}
+                  onClearExplanation={clearExplanation}
                   sets={sets}
                 />
               </div>

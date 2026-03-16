@@ -29,6 +29,8 @@ interface AnalysisContextValue {
   setAiExplanation: (explanation: string | null) => void;
   quizAIExplanation: string | null;
   setQuizAIExplanation: (explanation: string | null) => void;
+  roadmapAIExplanation: string | null;
+  setRoadmapAIExplanation: (explanation: string | null) => void;
   generatingTools: string[];
   handleSubmit: (urls: string[], options?: any) => Promise<void>;
   handleSendMessage: (content: string, forcedContext?: string | null, toolId?: string | null) => Promise<void>;
@@ -40,6 +42,7 @@ interface AnalysisContextValue {
   handleTimestampClick: (seconds: number) => void;
   handleAddToSpace: (spaceId: string) => Promise<void>;
   loadAnalysis: (analysisId: string) => Promise<void>;
+  clearExplanation: () => void;
   isChatOpen: boolean;
   setIsChatOpen: (isOpen: boolean) => void;
   analysisStyle: string;
@@ -68,6 +71,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [contextSnippet, setContextSnippet] = useState<string | null>(null);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [quizAIExplanation, setQuizAIExplanation] = useState<string | null>(null);
+  const [roadmapAIExplanation, setRoadmapAIExplanation] = useState<string | null>(null);
   const [generatingTools, setGeneratingTools] = useState<string[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [analysisStyle, setAnalysisStyle] = useState("");
@@ -258,7 +262,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setContextSnippet(null);
     if (toolId === 'explain') setAiExplanation("");
     if (toolId === 'quiz_hint' || toolId === 'quiz_explain') setQuizAIExplanation("");
-
+    if (toolId === 'roadmap_explain') setRoadmapAIExplanation("");
     try {
       if (activeAnalysisId) {
         const response = await fetch(`${API_BASE_URL}/chat/${activeAnalysisId}`, {
@@ -306,6 +310,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
                   });
                   if (toolId === 'explain') setAiExplanation(assistantMsgContent);
                   if (toolId === 'quiz_hint' || toolId === 'quiz_explain') setQuizAIExplanation(assistantMsgContent);
+                  if (toolId === 'roadmap_explain') setRoadmapAIExplanation(assistantMsgContent);
                 }
               } catch (e) {
                 logger.warn("Error parsing chunk", e);
@@ -588,6 +593,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const clearExplanation = useCallback(() => {
+    setAiExplanation(null);
+    setQuizAIExplanation(null);
+    setRoadmapAIExplanation(null);
+  }, []);
+
   return (
     <AnalysisContext.Provider
       value={{
@@ -611,6 +622,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setAiExplanation,
         quizAIExplanation,
         setQuizAIExplanation,
+        roadmapAIExplanation,
+        setRoadmapAIExplanation,
         generatingTools,
         handleSubmit,
         handleSendMessage,
@@ -622,6 +635,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         handleTimestampClick,
         handleAddToSpace,
         loadAnalysis,
+        clearExplanation,
         isChatOpen,
         setIsChatOpen,
         analysisStyle,

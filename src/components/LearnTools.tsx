@@ -22,6 +22,7 @@ const MindMapTab = lazy(() => import("./MindMapTab"));
 const Flashcards = lazy(() => import("./Flashcards"));
 const NotesTool = lazy(() => import("./NotesTool"));
 const SynthesisTab = lazy(() => import("./SynthesisTab"));
+const RoadmapTab = lazy(() => import("./RoadmapTab"));
 
 interface QuizQuestion {
   question: string;
@@ -80,10 +81,20 @@ interface LearnToolsProps {
   timestamps?: Timestamp[];
   aiExplanation?: string | null;
   quizAIExplanation?: string | null;
+  roadmapAIExplanation?: string | null;
   onClearExplanation?: () => void;
   onMaximize?: () => void;
   isMaximized?: boolean;
 }
+
+const LoadingState = () => (
+  <div className="p-12 text-center space-y-6">
+    <div className="w-20 h-20 rounded-[2.5rem] bg-gray-50 mx-auto flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-gray-200 border-t-black animate-spin rounded-full" />
+    </div>
+    <p className="text-xs font-bold text-gray-400 capitalize">Loading analysis tool...</p>
+  </div>
+);
 
 const LearnTools = ({ 
   onToolClick, 
@@ -115,6 +126,7 @@ const LearnTools = ({
   isMaximized,
   aiExplanation,
   quizAIExplanation,
+  roadmapAIExplanation,
   onClearExplanation,
 }: LearnToolsProps) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -330,37 +342,16 @@ const LearnTools = ({
           );
         }
         return roadmapData ? (
-          <div className="relative pl-6 pr-2 py-8 space-y-12">
-             <div className="absolute left-10 top-12 bottom-12 w-px border-l-2 border-dashed border-gray-100 z-0" />
-             
-             <div className="flex items-center gap-4 mb-4 relative z-10 bg-white pb-4">
-                <div className="w-12 h-12 rounded-2xl bg-black flex items-center justify-center shadow-xl shadow-black/10">
-                   <Rocket className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black tracking-tight">{roadmapData.title || "Mastery Path"}</h3>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{roadmapData.steps.length} Milestones</p>
-                </div>
-             </div>
-
-             {roadmapData.steps.map((step, i) => (
-                <div key={i} className="relative z-10 flex items-start gap-6 group">
-                   <div className={cn(
-                     "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-black text-[10px] shadow-md transition-all group-hover:scale-110 border-2",
-                     i === 0 ? "bg-black border-black text-white" : "bg-white border-gray-100 text-gray-400 group-hover:border-black group-hover:text-black"
-                   )}>
-                     {step.step}
-                   </div>
-                   <div className="flex-1 space-y-2 pt-0.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Stage {step.step}</p>
-                      <h4 className="text-sm font-bold text-gray-900 leading-tight group-hover:text-black transition-colors">{step.task}</h4>
-                      <div className="p-5 rounded-[2rem] bg-gray-50/50 border border-gray-50 text-[11px] font-medium text-gray-500 leading-relaxed group-hover:bg-white group-hover:border-gray-100 group-hover:shadow-lg group-hover:shadow-black/5 transition-all">
-                         {step.description}
-                      </div>
-                   </div>
-                </div>
-             ))}
-          </div>
+          <Suspense fallback={<LoadingState />}>
+            <RoadmapTab 
+              roadmap={roadmapData} 
+              onAIAction={onAIAction}
+              onGenerateMore={() => onGenerate?.('roadmap', true)}
+              isGenerating={generatingTools.includes('roadmap')}
+              roadmapAIExplanation={roadmapAIExplanation}
+              onClearExplanation={onClearExplanation}
+            />
+          </Suspense>
         ) : null;
       case 'mindmap':
         return mindMapData ? (
@@ -634,11 +625,11 @@ const LearnTools = ({
                   </div>
                 )}
               </div>
-            </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+              </ScrollArea>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Large Bottom Input Section - Fixed at bottom */}
       <div className="p-6 pt-2 bg-white border-t border-gray-50 shrink-0">
