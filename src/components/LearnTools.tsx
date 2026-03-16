@@ -30,9 +30,11 @@ interface LearnToolsProps {
   hasMindMap?: boolean;
   isChatLoading?: boolean;
   isMobile?: boolean;
+  onGenerate?: (toolId: string) => void;
+  generatingTools?: string[];
 }
 
-const LearnTools = ({ onToolClick, sets = [], hasQuiz, hasFlashcards, hasRoadmap, hasMindMap, isChatLoading, isMobile }: LearnToolsProps) => {
+const LearnTools = ({ onToolClick, sets = [], hasQuiz, hasFlashcards, hasRoadmap, hasMindMap, isChatLoading, isMobile, onGenerate, generatingTools = [] }: LearnToolsProps) => {
   const [question, setQuestion] = useState("");
   const [lastClicked, setLastClicked] = useState<string | null>(null);
 
@@ -98,7 +100,22 @@ const LearnTools = ({ onToolClick, sets = [], hasQuiz, hasFlashcards, hasRoadmap
                 </div>
                 <div>
                    <p className="text-sm font-bold text-foreground">{tool.name}</p>
-                   {tool.type === 'chat' && <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">AI Tool</span>}
+                   {tool.available === false ? (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onGenerate?.(tool.id);
+                        }}
+                        disabled={generatingTools.includes(tool.id)}
+                        className="text-[10px] font-bold text-black bg-gray-100 px-2 py-0.5 rounded-full uppercase tracking-wider hover:bg-black hover:text-white transition-all mt-1"
+                      >
+                        {generatingTools.includes(tool.id) ? "Generating..." : "Generate"}
+                      </button>
+                   ) : tool.type === 'chat' ? (
+                      <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">AI Tool</span>
+                   ) : (
+                      <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Ready</span>
+                   )}
                 </div>
               </button>
             );

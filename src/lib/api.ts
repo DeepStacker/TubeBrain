@@ -36,7 +36,13 @@ interface RegisterPayload extends LoginPayload {
 }
 
 interface UpdateProfilePayload {
-  name: string;
+  name?: string;
+  avatar_url?: string;
+  settings?: {
+    expertise?: string;
+    theme?: string;
+    notifications_enabled?: boolean;
+  };
 }
 
 export const authApi = {
@@ -96,6 +102,13 @@ export const chatApi = {
 };
 
 export const analysisApi = {
+  get: (id: string) => apiFetch(`/analysis/${id}`),
   delete: (analysisId: string) => apiFetch(`/analysis/${analysisId}`, { method: "DELETE" }),
   getStatus: (analysisId: string) => apiFetch(`/analysis/${analysisId}/status`),
+  generateTool: (analysisId: string, toolType: string) =>
+    apiFetch(`/analysis/${analysisId}/generate?tool_type=${toolType}`, { method: "POST" }),
+};
+
+export const searchApi = {
+  query: (q: string) => apiFetch(`/search/?q=${encodeURIComponent(q)}`),
 };

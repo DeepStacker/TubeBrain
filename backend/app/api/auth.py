@@ -291,6 +291,8 @@ async def patch_me(
         user.name = req.name
     if req.avatar_url is not None:
         user.avatar_url = req.avatar_url
+    if req.settings is not None:
+        user.settings = req.settings.model_dump()
 
     await db.commit()
     await db.refresh(user)

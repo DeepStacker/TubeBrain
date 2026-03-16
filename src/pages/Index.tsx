@@ -86,6 +86,8 @@ import {
   paymentApi,
   exportApi,
   chatApi,
+  analysisApi,
+  searchApi,
   removeAuthToken 
 } from "@/lib/api";
 import { extractVideoId, POLL_INTERVAL_MS, POLL_MAX_ATTEMPTS, MAX_RECENTS_SHOWN, MAX_CHAT_HISTORY_CONTEXT, STORAGE_KEYS, API_BASE_URL } from "@/lib/constants";
@@ -138,6 +140,9 @@ const Index = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("profile");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [generatingTools, setGeneratingTools] = useState<string[]>([]);
 
   const fetchTransactions = async () => {
     try {
@@ -168,6 +173,14 @@ const Index = () => {
         setUser(userData);
         localStorage.setItem(STORAGE_KEYS.USER_NAME, userData.name || '');
         localStorage.setItem(STORAGE_KEYS.USER_EMAIL, userData.email || '');
+        
+        // Sync settings
+        if (userData.settings) {
+          if (userData.settings.expertise) {
+            const exp = userData.settings.expertise.charAt(0).toUpperCase() + userData.settings.expertise.slice(1);
+            setExpertise(exp as any);
+          }
+        }
       }
       
       if (creditRes.ok) {
@@ -195,13 +208,17 @@ const Index = () => {
   const handleUpdateProfile = async () => {
     if (!newName.trim()) return;
     try {
-      const res = await authApi.updateMe({ name: newName.trim() });
+      const res = await authApi.updateMe({ 
+        name: newName.trim(),
+        settings: {
+          expertise: expertise.toLowerCase(),
+        }
+      });
       if (res.ok) {
         const updatedUser = await res.json();
         setUser(updatedUser);
         localStorage.setItem(STORAGE_KEYS.USER_NAME, updatedUser.name);
-        setIsProfileUpdateOpen(false);
-        toast.success("Profile updated!");
+        toast.success("Profile and settings updated!");
       } else {
         toast.error("Failed to update profile");
       }
@@ -604,13 +621,53 @@ const Index = () => {
         metadata: mData,
         status: "completed"
       });
-
-      setAnalysisStatus(null);
-      setAnalysisProgress(0);
       setHistoryItems(await fetchHistory());
-      return data;
     }
-    return null;
+    return data;
+  };
+
+  const handleGenerateTool = async (toolId: string) => {
+    if (!activeAnalysisId) return;
+    
+    setGeneratingTools(prev => [...prev, toolId]);
+    try {
+      const toolTypeMap: Record<string, string> = {
+        'quiz': 'quiz',
+        'roadmap': 'roadmap',
+        'mindmap': 'mind_map',
+        'flashcards': 'flashcards',
+        'takeaways': 'takeaways'
+      };
+      
+      const backendToolType = toolTypeMap[toolId];
+      if (!backendToolType) return;
+
+      const res = await analysisApi.generateTool(activeAnalysisId, backendToolType);
+      if (res.ok) {
+        const updatedAnalysis = await res.json();
+        
+        // Update summaryData with new tool
+        setSummaryData(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            [backendToolType]: updatedAnalysis[backendToolType]
+          };
+        });
+        
+        toast.success(`${toolId.charAt(0).toUpperCase() + toolId.slice(1)} generated!`);
+        
+        // Update history item
+        setHistoryItems(await fetchHistory());
+      } else {
+        toast.error(`Failed to generate ${toolId}`);
+      }
+    } catch (err) {
+      logger.error(`Generation error for ${toolId}:`, err);
+      toast.error("An error occurred during generation");
+    } finally {
+      setGeneratingTools(prev => prev.filter(id => id !== toolId));
+    }
   };
 
   const handleTimestampClick = (seconds: number) => {
@@ -1150,6 +1207,48 @@ const Index = () => {
                       </div>
                     </div>
 
+                    <div className="space-y-6 pt-4">
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Cognitive Expertise</label>
+                        <div className="flex gap-3">
+                          {['Beginner', 'Intermediate', 'Expert'].map((level) => (
+                            <button
+                              key={level}
+                              onClick={() => setExpertise(level as any)}
+                              className={cn(
+                                "flex-1 px-4 py-3 rounded-2xl text-xs font-bold transition-all border-2",
+                                expertise === level 
+                                  ? "bg-black text-white border-black shadow-lg shadow-black/10" 
+                                  : "bg-white text-gray-400 border-gray-100 hover:border-gray-200"
+                              )}
+                            >
+                              {level}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-medium ml-1">Adjusts the depth of synthesis and study tools.</p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Platform Theme</label>
+                        <div className="flex gap-3">
+                          {['Light', 'Dark', 'System'].map((t) => (
+                            <button
+                              key={t}
+                              className={cn(
+                                "flex-1 px-4 py-3 rounded-2xl text-xs font-bold transition-all border-2",
+                                t === 'Light' 
+                                  ? "bg-black text-white border-black shadow-lg shadow-black/10" 
+                                  : "bg-white text-gray-400 border-gray-100 opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="pt-6">
                       <Button 
                         onClick={handleUpdateProfile}
@@ -1284,64 +1383,52 @@ const Index = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {(historyItems.filter(h => h.title.toLowerCase().includes(searchQuery.toLowerCase())).length > 0) && (
+                  {isSearchLoading ? (
+                    <div className="py-12 text-center">
+                       <p className="text-sm font-bold text-gray-400">Searching...</p>
+                    </div>
+                  ) : searchResults.length > 0 ? (
                     <div>
-                       <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] px-3 mb-3">Videos</h4>
+                       <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] px-3 mb-3">Found in Library</h4>
                        <div className="space-y-1">
-                         {historyItems.filter(h => h.title.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5).map(item => (
+                         {searchResults.map(result => (
                            <button 
-                             key={item.id}
+                             key={result.id}
                              onClick={() => {
-                               handleLoadHistoryItem(item);
+                               if (result.type === "video" || result.type === "analysis" || result.type === "transcript") {
+                                 handleLoadHistoryItem({
+                                   id: result.video_id || result.id,
+                                   title: result.title,
+                                   videoIds: [result.platform_id || result.video_id || result.id],
+                                   date: new Date().toISOString(),
+                                   // Dummy fields to satisfy type if needed, or better to update type
+                                   status: "ready"
+                                 } as any);
+                               }
                                setIsSearchModalOpen(false);
                                setSearchQuery("");
                              }}
                              className="w-full flex items-center gap-4 p-3 hover:bg-gray-50 rounded-[20px] transition-all group text-left"
                            >
                              <div className="w-16 h-10 bg-gray-100 rounded-xl overflow-hidden shrink-0 border border-gray-50">
-                               <img src={`https://img.youtube.com/vi/${item.videoIds[0]}/default.jpg`} alt="" className="w-full h-full object-cover" />
+                               {result.thumbnail ? (
+                                 <img src={result.thumbnail} alt="" className="w-full h-full object-cover" />
+                               ) : (
+                                 <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                   <Search className="h-4 w-4 text-gray-200" />
+                                 </div>
+                               )}
                              </div>
                              <div className="min-w-0 flex-1">
-                               <p className="text-sm font-bold truncate group-hover:text-black transition-colors">{item.title}</p>
-                               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">{getRelativeDate(item.date)}</span>
+                               <p className="text-sm font-bold truncate group-hover:text-black transition-colors">{result.title}</p>
+                               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold truncate block">{result.subtitle}</span>
                              </div>
                              <ArrowRight className="h-4 w-4 text-gray-200 group-hover:text-black transition-all" />
                            </button>
                          ))}
                        </div>
                     </div>
-                  )}
-
-                  {(spaces.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0) && (
-                    <div>
-                       <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] px-3 mb-3">Spaces</h4>
-                       <div className="space-y-1">
-                         {spaces.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map(space => (
-                           <button 
-                             key={space.id}
-                             onClick={() => {
-                               handleSidebarClick({ type: "Space", id: space.id, name: space.name });
-                               setIsSearchModalOpen(false);
-                               setSearchQuery("");
-                             }}
-                             className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-[20px] transition-all group text-left"
-                           >
-                             <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
-                               <FolderOpen className="h-4 w-4" />
-                             </div>
-                             <div className="min-w-0 flex-1">
-                               <p className="text-sm font-bold truncate group-hover:text-black transition-colors">{space.name}</p>
-                               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">{space.videoIds.length} items</span>
-                             </div>
-                             <ArrowRight className="h-4 w-4 text-gray-200 group-hover:text-black transition-all" />
-                           </button>
-                         ))}
-                       </div>
-                    </div>
-                  )}
-
-                  {historyItems.filter(h => h.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && 
-                   spaces.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                  ) : (
                     <div className="py-12 text-center">
                        <p className="text-sm font-bold text-gray-400">No results found for "{searchQuery}"</p>
                     </div>
@@ -1659,16 +1746,19 @@ const Index = () => {
                       <div className="hidden lg:block w-[350px] shrink-0 sticky top-24 self-start">
                         <LearnTools 
                           onToolClick={handleToolClick} 
-                          hasQuiz={!!summaryData?.quiz?.length}
-                          hasFlashcards={!!summaryData?.flashcards?.length}
+                          hasQuiz={!!summaryData?.quiz}
+                          hasFlashcards={!!summaryData?.flashcards}
                           hasRoadmap={!!summaryData?.roadmap}
-                          hasMindMap={!!summaryData?.mind_map?.nodes?.length}
+                          hasMindMap={!!summaryData?.mind_map}
                           isChatLoading={isChatLoading}
-                          sets={[
-                            ...(summaryData?.quiz?.length ? [{ id: 'quiz-set', name: `Quiz (${summaryData.quiz.length} questions)`, date: 'Generated', type: 'quiz' }] : []),
-                            ...(summaryData?.flashcards?.length ? [{ id: 'flashcard-set', name: `Flashcards (${summaryData.flashcards.length} cards)`, date: 'Generated', type: 'flashcards' }] : []),
-                            ...(summaryData?.roadmap ? [{ id: 'roadmap-set', name: `Learning Roadmap`, date: 'Generated', type: 'roadmap' }] : []),
-                          ]}
+                          onGenerate={handleGenerateTool}
+                          generatingTools={generatingTools}
+                          sets={summaryData ? [
+                            ...(summaryData.quiz ? [{ id: 'quiz', name: 'Knowledge Quiz', date: 'Generated', type: 'quiz' }] : []),
+                            ...(summaryData.flashcards ? [{ id: 'flashcards', name: 'Brain Cards', date: 'Generated', type: 'flashcards' }] : []),
+                            ...(summaryData.roadmap ? [{ id: 'roadmap', name: 'Learning Path', date: 'Generated', type: 'roadmap' }] : []),
+                            ...(summaryData.mind_map ? [{ id: 'mind_map', name: 'Mind Map', date: 'Generated', type: 'mind_map' }] : []),
+                          ] : []}
                         />
                       </div>
                     )}
