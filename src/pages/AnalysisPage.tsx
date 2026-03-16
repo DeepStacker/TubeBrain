@@ -10,15 +10,15 @@ import VideoPreview from "@/components/VideoPreview";
 import SummaryDisplay from "@/components/SummaryDisplay";
 import LoadingSkeleton from "@/components/LoadingSkeleton";
 import LearnTools from "@/components/LearnTools";
-import AIChatSidebar from "@/components/AIChatSidebar";
 import { Button } from "@/components/ui/button";
 
 export default function AnalysisPage() {
   const { videoId } = useParams<{ videoId: string }>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [isMobileLearnOpen, setIsMobileLearnOpen] = useState(false);
-  const [activeSidebarTab, setActiveSidebarTab] = useState("synthesis");
-  const [openSidebarTabs, setOpenSidebarTabs] = useState<string[]>(["learn", "synthesis"]);
+  const [activeSidebarTab, setActiveSidebarTab] = useState("summary");
+  const [openSidebarTabs, setOpenSidebarTabs] = useState<string[]>(["learn", "summary"]);
+  const [isSidebarMaximized, setIsSidebarMaximized] = useState(false);
 
   const {
     videoData,
@@ -45,7 +45,7 @@ export default function AnalysisPage() {
     loadAnalysis
   } = useAnalysisContext();
 
-  const { isFocusMode, isVideoMinimized, setIsVideoMinimized } = useUIContext();
+  const { isFocusMode, setIsFocusMode, isVideoMinimized, setIsVideoMinimized } = useUIContext();
   const { spaces } = useSpacesContext();
 
   // Load analysis if videoId changes and not already loaded
@@ -124,16 +124,18 @@ export default function AnalysisPage() {
       <div className="flex-1">
         <div className={cn(
           "transition-all duration-700 ease-in-out",
-          isFocusMode ? "max-w-6xl mx-auto pt-10 pb-24 px-8" : "max-w-6xl mx-auto px-8 py-6"
+          isSidebarMaximized ? "w-full h-screen overflow-hidden" : (isFocusMode ? "max-w-6xl mx-auto pt-10 pb-24 px-8" : "max-w-6xl mx-auto px-8 py-6")
         )}>
           <div className={cn(
-            "flex flex-col lg:flex-row gap-6 lg:gap-10 transition-all duration-700",
-            isFocusMode && "lg:gap-12"
+            "flex flex-col lg:flex-row gap-6 lg:gap-10 transition-all duration-700 h-full overflow-hidden",
+            isFocusMode && "lg:gap-12",
+            isSidebarMaximized && "gap-0"
           )}>
             {/* Left Column - Video & Analysis */}
             <div className={cn(
               "flex-1 min-w-0 transition-all duration-700",
-              isFocusMode ? "lg:w-[65%]" : ""
+              isFocusMode ? "lg:w-[65%]" : "",
+              isSidebarMaximized && "hidden"
             )}>
               {/* Video Player Section */}
               <div className={cn(
@@ -244,7 +246,12 @@ export default function AnalysisPage() {
                       spaces={spaces}
                       onAddToSpace={handleAddToSpace}
                       currentTime={currentTime}
-                      onToolClick={handleToolClick}
+                      onToolClick={(toolId, value, context) => {
+                        handleToolClick(toolId, value, context);
+                        if (['chapters', 'transcript', 'summary'].includes(toolId)) {
+                          handleOpenTab(toolId);
+                        }
+                      }}
                     />
                   </motion.div>
                 ) : null}
@@ -253,41 +260,44 @@ export default function AnalysisPage() {
 
             {/* Right Column - Desktop Study Tools (Hidden in Focus Mode) */}
             {!isFocusMode && (
-              <div className="hidden lg:block w-[380px] shrink-0 sticky top-6 self-start">
+              <div className={cn(
+                "hidden lg:block shrink-0 transition-all duration-500 overflow-hidden",
+                isSidebarMaximized ? "w-full h-screen" : "w-[380px] sticky top-6 self-start h-[calc(100vh-48px)]"
+              )}>
                 <LearnTools 
                   onToolClick={(toolId, value, context) => {
                     handleToolClick(toolId, value, context);
-                    if (['quiz', 'flashcards', 'roadmap', 'mindmap', 'synthesis'].includes(toolId)) {
+                    if (['quiz', 'flashcards', 'roadmap', 'mindmap', 'summary', 'chapters', 'transcript'].includes(toolId)) {
                       handleOpenTab(toolId);
                     }
                   }} 
                   activeSidebarTab={activeSidebarTab}
                   onSidebarTabChange={setActiveSidebarTab}
                   onCloseTab={handleCloseTab}
+                  onMaximize={() => setIsSidebarMaximized(!isSidebarMaximized)}
+                  isMaximized={isSidebarMaximized}
                   openTabs={openSidebarTabs}
-                  hasQuiz={!!summaryData?.quiz}
-                  hasFlashcards={!!summaryData?.flashcards}
-                  hasRoadmap={!!summaryData?.roadmap}
-                  hasMindMap={!!summaryData?.mind_map}
+                  hasQuiz={!!summaryData?.quiz?.length}
+                  hasFlashcards={!!summaryData?.flashcards?.length}
+                  hasRoadmap={!!summaryData?.roadmap?.steps?.length}
+                  hasMindMap={!!summaryData?.mind_map?.nodes?.length}
                   quizData={summaryData?.quiz}
                   flashcardsData={summaryData?.flashcards}
                   roadmapData={summaryData?.roadmap}
                   mindMapData={summaryData?.mind_map}
-                  podcastData={summaryData?.podcast}
-                  isChatLoading={isChatLoading}
                   onGenerate={handleGenerateTool}
                   generatingTools={generatingTools}
                   overview={summaryData?.overview}
-                  keyPoints={summaryData?.keyPoints}
+                  keyPoints={summaryData?.keyPoints || summaryData?.key_points}
                   takeaways={summaryData?.takeaways}
                   tags={summaryData?.tags}
                   learningContext={summaryData?.learning_context}
                   onTimestampClick={handleTimestampClick}
                   timestamps={summaryData?.timestamps}
                   sets={summaryData ? [
-                    { id: 'synthesis', name: 'Overview & Insights', date: 'Generated', type: 'synthesis' },
-                    ...(summaryData.quiz ? [{ id: 'quiz', name: 'Knowledge Quiz', date: 'Generated', type: 'quiz' }] : []),
-                    ...(summaryData.flashcards ? [{ id: 'flashcards', name: 'Brain Cards', date: 'Generated', type: 'flashcards' }] : []),
+                    { id: 'summary', name: 'Overview & Insights', date: 'Generated', type: 'summary' },
+                    ...(summaryData.quiz?.length ? [{ id: 'quiz', name: 'Knowledge Quiz', date: 'Generated', type: 'quiz' }] : []),
+                    ...(summaryData.flashcards?.length ? [{ id: 'flashcards', name: 'Brain Cards', date: 'Generated', type: 'flashcards' }] : []),
                     ...(summaryData.roadmap ? [{ id: 'roadmap', name: 'Learning Path', date: 'Generated', type: 'roadmap' }] : []),
                     ...(summaryData.mind_map ? [{ id: 'mind_map', name: 'Mind Map', date: 'Generated', type: 'mindmap' }] : []),
                   ] : []}
@@ -332,7 +342,7 @@ export default function AnalysisPage() {
                   <LearnTools 
                     onToolClick={(id, v, c) => { 
                       handleToolClick(id, v, c); 
-                      if (['quiz', 'flashcards', 'roadmap', 'mindmap', 'synthesis'].includes(id)) {
+                      if (['quiz', 'flashcards', 'roadmap', 'mindmap', 'summary'].includes(id)) {
                         handleOpenTab(id);
                       } else {
                         setIsMobileLearnOpen(false); 
@@ -344,30 +354,28 @@ export default function AnalysisPage() {
                     openTabs={openSidebarTabs}
                     hasQuiz={!!summaryData?.quiz?.length}
                     hasFlashcards={!!summaryData?.flashcards?.length}
-                    hasRoadmap={!!summaryData?.roadmap}
+                    hasRoadmap={!!summaryData?.roadmap?.steps?.length}
                     hasMindMap={!!summaryData?.mind_map?.nodes?.length}
                     quizData={summaryData?.quiz}
                     flashcardsData={summaryData?.flashcards}
                     roadmapData={summaryData?.roadmap}
                     mindMapData={summaryData?.mind_map}
-                    isChatLoading={isChatLoading}
                     onGenerate={handleGenerateTool}
                     generatingTools={generatingTools}
                     overview={summaryData?.overview}
-                    keyPoints={summaryData?.keyPoints}
+                    keyPoints={summaryData?.keyPoints || summaryData?.key_points}
                     takeaways={summaryData?.takeaways}
                     tags={summaryData?.tags}
                     learningContext={summaryData?.learning_context}
                     onTimestampClick={handleTimestampClick}
                     timestamps={summaryData?.timestamps}
                     sets={[
-                      { id: 'synthesis-set', name: 'Synthesis', date: 'Generated', type: 'synthesis' },
+                      { id: 'summary-set', name: 'Summary', date: 'Generated', type: 'summary' },
                       ...(summaryData?.quiz?.length ? [{ id: 'quiz-set', name: `Quiz (${summaryData.quiz.length} questions)`, date: 'Generated', type: 'quiz' }] : []),
                       ...(summaryData?.flashcards?.length ? [{ id: 'flashcard-set', name: `Flashcards (${summaryData.flashcards.length} cards)`, date: 'Generated', type: 'flashcards' }] : []),
                       ...(summaryData?.roadmap ? [{ id: 'roadmap-set', name: `Learning Roadmap`, date: 'Generated', type: 'roadmap' }] : []),
                       ...(summaryData?.mind_map ? [{ id: 'mindmap-set', name: `Mind Map`, date: 'Generated', type: 'mindmap' }] : []),
                     ]}
-                    isMobile
                   />
                 </motion.div>
               </>
@@ -377,15 +385,7 @@ export default function AnalysisPage() {
       )}
 
       {/* AI Chat Sidebar */}
-      <AIChatSidebar
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        messages={chatMessages}
-        onSendMessage={handleSendMessage}
-        isLoading={isChatLoading}
-        contextSnippet={contextSnippet}
-        onClearContext={() => setContextSnippet(null)}
-      />
+
     </motion.div>
   );
 }

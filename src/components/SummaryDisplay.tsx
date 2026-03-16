@@ -168,7 +168,7 @@ const SummaryDisplay = ({
             <div className="w-8 h-8 rounded-xl bg-gray-50 dark:bg-gray-900 flex items-center justify-center border border-gray-100 dark:border-gray-800">
               <BookOpen className="h-4 w-4 text-black dark:text-white" />
             </div>
-            <h2 className="text-xl font-bold text-foreground truncate max-w-sm">Video Synthesis</h2>
+            <h2 className="text-xl font-bold text-foreground truncate max-w-sm">Video Summary</h2>
          </div>
          
          <div className="flex items-center gap-2">
@@ -269,7 +269,7 @@ const SummaryDisplay = ({
                         if (e.key === 'Enter') {
                           const val = (e.target as HTMLInputElement).value;
                           if (val.trim()) {
-                            onToolClick?.('ask', val, `[Chapters Context]:\n${timestamps?.map(t => `${t.time}: ${t.label}`).join('\n')}`);
+                            onToolClick?.('chapters', val, `[Chapters Context]:\n${timestamps?.map(t => `${t.time}: ${t.label}`).join('\n')}`);
                             (e.target as HTMLInputElement).value = '';
                           }
                         }
@@ -317,7 +317,7 @@ const SummaryDisplay = ({
                         if (e.key === 'Enter') {
                           const val = (e.target as HTMLInputElement).value;
                           if (val.trim()) {
-                            onToolClick?.('ask', val, `[Transcript Snippet]:\n${transcript?.slice(0, 1000)}...`);
+                            onToolClick?.('transcript', val, `[Transcript Snippet]:\n${transcript?.slice(0, 1000)}...`);
                             (e.target as HTMLInputElement).value = '';
                           }
                         }

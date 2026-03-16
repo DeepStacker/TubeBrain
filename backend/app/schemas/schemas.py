@@ -154,6 +154,7 @@ class AnalysisDetailResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     context_snippet: Optional[str] = None
+    tool_id: Optional[str] = None
 
 
 class ChatMessageResponse(BaseModel):

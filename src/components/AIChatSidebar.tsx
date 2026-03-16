@@ -19,7 +19,7 @@ interface Message {
 
 interface AIChatSidebarProps {
   messages: Message[];
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, forcedContext?: string | null) => void;
   isOpen: boolean;
   onClose: () => void;
   isLoading?: boolean;

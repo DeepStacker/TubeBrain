@@ -28,6 +28,7 @@ export interface MindMapData {
 export interface SummaryData {
   overview: string;
   keyPoints: string[];
+  key_points?: string[]; // Backend alias
   takeaways: string[];
   timestamps: { time: string; label: string }[];
   tags: string[];

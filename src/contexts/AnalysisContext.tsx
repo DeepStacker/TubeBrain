@@ -27,7 +27,7 @@ interface AnalysisContextValue {
   setContextSnippet: (snippet: string | null) => void;
   generatingTools: string[];
   handleSubmit: (urls: string[], options?: any) => Promise<void>;
-  handleSendMessage: (content: string) => Promise<void>;
+  handleSendMessage: (content: string, forcedContext?: string | null, toolId?: string | null) => Promise<void>;
   handleGenerateTool: (toolId: string) => Promise<void>;
   handleExport: (format: "json" | "markdown") => Promise<void>;
   handleLoadHistoryItem: (item: HistoryItem) => Promise<void>;
@@ -238,9 +238,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const handleSendMessage = useCallback(async (content: string) => {
+  const handleSendMessage = useCallback(async (content: string, forcedContext?: string | null, toolId?: string | null) => {
+    const activeContext = forcedContext !== undefined ? forcedContext : contextSnippet;
     const finalContent = content;
-    const newUserMsg: ChatMessage = { role: "user", content: contextSnippet ? `[Context: ${contextSnippet}]\n\n${finalContent}` : finalContent };
+    const newUserMsg: ChatMessage = { 
+      role: "user", 
+      content: finalContent,
+      toolId: toolId || undefined
+    };
     const updatedMessages = [...chatMessages, newUserMsg];
     setChatMessages(updatedMessages);
     setIsChatLoading(true);
@@ -255,7 +260,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             "Authorization": `Bearer ${getAuthToken()}`,
           },
           body: JSON.stringify({
-            message: newUserMsg.content,
+            message: finalContent,
+            context_snippet: activeContext,
+            tool_id: toolId,
             chatHistory: chatMessages.slice(-5)
           }),
         });
@@ -266,7 +273,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         const decoder = new TextDecoder();
         let assistantMsgContent = "";
         
-        setChatMessages(prev => [...prev, { role: "assistant", content: "" }]);
+        setChatMessages(prev => [...prev, { role: "assistant", content: "", toolId: toolId || undefined }]);
 
         while (true) {
           const { done, value } = await reader!.read();
@@ -317,7 +324,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsChatLoading(false);
     }
-  }, [activeAnalysisId, chatMessages, contextSnippet, videoIds]);
+  }, [activeAnalysisId, chatMessages, contextSnippet, videoIds, setIsChatOpen, setChatMessages, setIsChatLoading, setContextSnippet]);
 
   const handleGenerateTool = useCallback(async (toolId: string) => {
     if (!activeAnalysisId) return;
@@ -335,7 +342,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         'mindmap': 'mind_map',
         'mind_map': 'mind_map',
         'flashcards': 'flashcards',
-        'podcast': 'podcast'
+        'podcast': 'podcast',
+        'summary': 'overview',
+        'synthesis': 'overview'
       };
       
       const backendToolType = toolTypeMap[toolId];
@@ -507,31 +516,49 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const handleToolClick = useCallback((toolId: string, value?: string, context?: string) => {
     const ON_DEMAND_TOOLS = [
       "overview", "key_points", "takeaways", "tags", "learning_context", 
-      "quiz", "roadmap", "mindmap", "mind_map", "flashcards", "podcast"
+      "quiz", "roadmap", "mindmap", "mind_map", "flashcards", "podcast",
+      "chapters", "transcript", "summary", "synthesis", "notes", "deepdive", "learn"
     ];
 
+    if (value) {
+      setIsChatOpen(true);
+      if (context) setContextSnippet(context);
+      handleSendMessage(value, context, toolId);
+      return;
+    }
+
     if (ON_DEMAND_TOOLS.includes(toolId)) {
+      // Special cases for non-gen tools
+      if (toolId === "deepdive") {
+        setIsChatOpen(true);
+        handleSendMessage("Provide an in-depth academic analysis of this video's content, including key arguments, evidence, critical evaluation, and connections to broader topics.", null, "deepdive");
+        toast.info("Generating deep-dive analysis...");
+        return;
+      }
+      if (toolId === "notes") {
+        setIsChatOpen(true);
+        handleSendMessage("Create comprehensive study notes from this video. Include key definitions, important concepts, examples mentioned, and a brief summary of each major section.", null, "notes");
+        toast.info("Generating study notes...");
+        return;
+      }
+      
       handleGenerateTool(toolId);
       return;
     }
 
-    if (toolId === "deepdive") {
-      setIsChatOpen(true);
-      handleSendMessage("Provide an in-depth academic analysis of this video's content, including key arguments, evidence, critical evaluation, and connections to broader topics.");
-      toast.info("Generating deep-dive analysis...");
-    } else if (toolId === "notes") {
-      setIsChatOpen(true);
-      handleSendMessage("Create comprehensive study notes from this video. Include key definitions, important concepts, examples mentioned, and a brief summary of each major section.");
-      toast.info("Generating study notes...");
-    } else if (toolId === "ask") {
+    if (ON_DEMAND_TOOLS.includes(toolId) && value) {
       setIsChatOpen(true);
       if (context) setContextSnippet(context);
-      if (value) handleSendMessage(value);
-    } else if (toolId === "action" && value) {
-      setIsChatOpen(true);
-      handleSendMessage(value);
+      handleSendMessage(value, context, toolId);
+      return;
     }
-  }, [handleGenerateTool, handleSendMessage, setContextSnippet]);
+
+    if (toolId === "ask" || toolId === "action") {
+      setIsChatOpen(true);
+      if (context) setContextSnippet(context);
+      if (value) handleSendMessage(value, context, toolId);
+    }
+  }, [handleGenerateTool, handleSendMessage, setContextSnippet, setIsChatOpen]);
 
   const handleTimestampClick = useCallback((seconds: number) => {
     if (!iframeRef.current?.contentWindow) return;

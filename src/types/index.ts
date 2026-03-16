@@ -14,6 +14,7 @@ export type { User, Transaction } from "@/hooks/use-auth";
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  toolId?: string;
 };
 
 export type ExpertiseLevel = "Beginner" | "Intermediate" | "Expert";

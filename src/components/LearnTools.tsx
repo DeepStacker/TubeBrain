@@ -1,30 +1,21 @@
 import { 
-  Headphones,
-  Video,
-  FileText,
-  HelpCircle,
-  Layers,
-  StickyNote,
-  Plus,
-  Brain,
-  Map as MapIcon,
-  Search,
-  Settings2,
-  Mic,
-  X,
-  Rocket,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  Download,
-  LayoutGrid,
-  MoreHorizontal
+  Copy, Check, BookOpen, Lightbulb, 
+  Clock, Map as MapIcon, FileText, 
+  Brain, Target, MessageSquare,
+  Rocket, Star, HelpCircle, Layers, LayoutGrid,
+  ChevronDown, Plus, FolderPlus, Search, 
+  ChevronUp, Settings2, Share2, MoreVertical, Maximize2, Sliders,
+  ChevronRight, StickyNote, MoreHorizontal, Mic, History,
+  User as UserIcon, Sparkles, X, ChevronLeftCircle,
+  Headphones, Video
 } from "lucide-react";
-import { useState, useMemo, Suspense, lazy } from "react";
-import { Button } from "./ui/button";
+import { useState, useEffect, useRef, lazy, Suspense, useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { RichMessage } from "./RichMessage";
+import { useAnalysisContext } from "@/contexts/AnalysisContext";
+import { AnimatePresence, motion } from "framer-motion";
 
 const QuizTab = lazy(() => import("./QuizTab"));
 const MindMapTab = lazy(() => import("./MindMapTab"));
@@ -68,8 +59,6 @@ interface LearnToolsProps {
   hasFlashcards?: boolean;
   hasRoadmap?: boolean;
   hasMindMap?: boolean;
-  isChatLoading?: boolean;
-  isMobile?: boolean;
   onGenerate?: (toolId: string) => void;
   generatingTools?: string[];
   quizData?: QuizQuestion[];
@@ -89,6 +78,8 @@ interface LearnToolsProps {
   learningContext?: LearningContext;
   onTimestampClick?: (seconds: number) => void;
   timestamps?: Timestamp[];
+  onMaximize?: () => void;
+  isMaximized?: boolean;
 }
 
 const LearnTools = ({ 
@@ -98,8 +89,6 @@ const LearnTools = ({
   hasFlashcards, 
   hasRoadmap, 
   hasMindMap, 
-  isChatLoading, 
-  isMobile, 
   onGenerate, 
   generatingTools = [],
   quizData,
@@ -118,34 +107,41 @@ const LearnTools = ({
   tags,
   learningContext,
   onTimestampClick,
-  timestamps
+  timestamps,
+  onMaximize,
+  isMaximized
 }: LearnToolsProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [askInput, setAskInput] = useState("");
+  const { chatMessages, isChatLoading } = useAnalysisContext();
+  const [showConversation, setShowConversation] = useState(false);
+
+  // Filter messages for current tool
+  const currentToolMessages = useMemo(() => {
+    return chatMessages.filter(m => m.toolId === activeSidebarTab);
+  }, [chatMessages, activeSidebarTab]);
+
+  useEffect(() => {
+    if (currentToolMessages.length > 0) {
+      setShowConversation(true);
+    }
+  }, [currentToolMessages.length]);
 
   const tools = [
-    { id: 'synthesis', name: 'Synthesis', icon: <Brain className="h-4 w-4" />, color: 'text-purple-600', bg: 'bg-purple-50', available: !!overview },
     { id: 'podcast', name: 'Podcast', icon: <Headphones className="h-4 w-4" />, color: 'text-indigo-600', bg: 'bg-indigo-50', available: !!podcastData },
     { id: 'video', name: 'Video', icon: <Video className="h-4 w-4" />, color: 'text-blue-600', bg: 'bg-blue-50', available: true },
-    { id: 'quiz', name: 'Quiz', icon: <HelpCircle className="h-4 w-4" />, color: 'text-rose-600', bg: 'bg-rose-50', available: hasQuiz || !!quizData },
-    { id: 'flashcards', name: 'Flashcards', icon: <Layers className="h-4 w-4" />, color: 'text-orange-600', bg: 'bg-orange-50', available: hasFlashcards || !!flashcardsData },
-    { id: 'notes', name: 'Notes', icon: <StickyNote className="h-4 w-4" />, color: 'text-amber-600', bg: 'bg-amber-50', available: true },
+    { id: 'summary', name: 'Summary', icon: <FileText className="h-4 w-4" />, color: 'text-blue-500', bg: 'bg-blue-50', available: !!overview },
+    { id: 'quiz', name: 'Quiz', icon: <HelpCircle className="h-4 w-4" />, color: 'text-rose-500', bg: 'bg-rose-50', available: hasQuiz || !!quizData },
+    { id: 'flashcards', name: 'Flashcards', icon: <Layers className="h-4 w-4" />, color: 'text-orange-500', bg: 'bg-orange-50', available: hasFlashcards || !!flashcardsData },
+    { id: 'notes', name: 'Notes', icon: <StickyNote className="h-4 w-4" />, color: 'text-amber-500', bg: 'bg-amber-50', available: true },
+    { id: 'roadmap', name: 'Lesson Plan', icon: <Rocket className="h-4 w-4" />, color: 'text-emerald-500', bg: 'bg-emerald-50', available: hasRoadmap || !!roadmapData, isNew: true },
   ];
-
-  const filteredSets = useMemo(() => 
-    sets.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())),
-    [searchQuery, sets]
-  );
-
-  const handleToolClick = (toolId: string) => {
-    onToolClick?.(toolId);
-  };
 
   const handleAsk = () => {
     if (askInput.trim()) {
       let context = "";
-      if (activeSidebarTab === 'synthesis' && (overview || keyPoints || takeaways)) {
-        context = `[Synthesis Context]:\nOverview: ${overview || "N/A"}\nKey Points: ${keyPoints?.join(", ") || "N/A"}\nTakeaways: ${takeaways?.join(", ") || "N/A"}`;
+      if (activeSidebarTab === 'summary' && (overview || keyPoints || takeaways)) {
+        context = `[Summary Context]:\nOverview: ${overview || "N/A"}\nKey Points: ${keyPoints?.join(", ") || "N/A"}\nTakeaways: ${takeaways?.join(", ") || "N/A"}`;
       } else if (activeSidebarTab === 'quiz' && quizData) {
         context = `[Quiz Context]:\n${quizData.map((q, i) => `Q${i+1}: ${q.question}`).join("\n")}`;
       } else if (activeSidebarTab === 'roadmap' && roadmapData) {
@@ -154,7 +150,7 @@ const LearnTools = ({
         context = `[Flashcards Context]:\n${flashcardsData.slice(0, 5).map((f, i) => `Card ${i+1}: ${f.front}`).join("\n")}`;
       }
       
-      onToolClick?.('ask', askInput.trim(), context);
+      onToolClick?.(activeSidebarTab, askInput.trim(), context);
       setAskInput("");
     }
   };
@@ -175,9 +171,9 @@ const LearnTools = ({
 
   const renderActiveTool = () => {
     switch (activeSidebarTab) {
-      case 'synthesis':
+      case 'summary':
         return (
-          <Suspense fallback={<div className="p-8 text-center text-gray-400">Loading synthesis...</div>}>
+          <Suspense fallback={<div className="p-8 text-center text-gray-400">Loading summary...</div>}>
             <SynthesisTab 
               overview={overview}
               keyPoints={keyPoints}
@@ -204,7 +200,7 @@ const LearnTools = ({
                   if (action === 'walkthrough') prompt = `Walk me through the logical steps to arrive at the correct answer for this question: "${context}"`;
                   onAIAction?.(action, prompt);
                   // Also trigger the 'ask' tool click to open chat if needed
-                  onToolClick?.('ask', prompt);
+                  onToolClick(activeSidebarTab, prompt, context);
                 }}
               />
             </div>
@@ -275,40 +271,12 @@ const LearnTools = ({
 
   return (
     <aside className={cn(
-      "bg-white flex-col overflow-hidden relative",
-      isMobile 
-        ? "flex w-full h-auto border-0" 
-        : "hidden lg:flex w-[380px] border-l border-gray-100 h-screen"
+      "bg-white flex flex-col overflow-hidden relative h-full max-h-full",
+      "w-full border-gray-100 transition-all duration-500",
+      !isMaximized && "border-l"
     )}>
-      {/* Pinned Podcast Player (YouLearn Style) */}
-      {podcastData?.audioUrl && (
-        <div className="mx-6 mt-6 p-4 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-100 flex items-center gap-4 group">
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-            <Headphones className="h-5 w-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">AI Podcast</p>
-            <p className="text-xs font-bold truncate">Study Overview</p>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white w-1/3" />
-              </div>
-              <span className="text-[9px] font-bold">1:24</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
-              <Pause className="h-4 w-4 fill-white" />
-            </button>
-            <button className="p-1.5 hover:bg-white/10 rounded-lg transition-colors hidden group-hover:block">
-              <Download className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tabbed Header */}
-      <div className="px-6 py-4 border-b border-gray-50 bg-white/50 backdrop-blur-md sticky top-0 z-20 overflow-x-auto scrollbar-none">
+      {/* Tabbed Header - Stays at top */}
+      <div className="px-6 py-4 border-b border-gray-50 bg-white/50 backdrop-blur-md z-20 overflow-x-auto scrollbar-none shrink-0">
         <div className="flex items-center gap-2">
            {activeTabs.map((tab) => (
              <button
@@ -337,115 +305,249 @@ const LearnTools = ({
             <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-xl bg-gray-50/50">
                <Plus className="h-4 w-4 text-gray-400" />
             </Button>
+            <button 
+              onClick={onMaximize}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors group ml-1"
+              title={isMaximized ? "Minimize Sidebar" : "Maximize Sidebar"}
+            >
+              <Maximize2 className={cn("h-4 w-4 text-gray-400 group-hover:text-black transition-transform", isMaximized && "rotate-180")} />
+            </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-none pb-40">
-        {activeSidebarTab === 'learn' ? (
-          <div className="space-y-10">
-            {/* Generate Section */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2">Generate</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {tools.map((tool) => (
-                  <button
-                    key={tool.id}
-                    onClick={() => handleToolClick(tool.id)}
-                    className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm transition-all group relative overflow-hidden h-14"
-                  >
-                    <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105", tool.bg, tool.color)}>
-                      {tool.icon}
-                    </div>
-                    <span className="text-[13px] font-bold text-gray-700 truncate flex-1 text-left">{tool.name}</span>
-                    <Settings2 className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-all transform translate-x-1 group-hover:translate-x-0" />
-                    
-                    {!tool.available && (
-                       <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-[9px] font-black uppercase tracking-tighter bg-black text-white px-2 py-0.5 rounded-lg">Generate</span>
-                       </div>
-                    )}
-                  </button>
-                ))}
-                
-                <button 
-                  onClick={() => handleToolClick('roadmap')}
-                  className="col-span-2 flex items-center gap-3 p-3 rounded-2xl border border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm transition-all group h-14"
-                >
-                   <div className="w-9 h-9 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-                      <Brain className="h-4 w-4" />
-                   </div>
-                   <span className="text-[13px] font-bold text-gray-700 flex-1 text-left">Lesson Plan</span>
-                   <span className="text-[9px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-lg uppercase">New</span>
-                   <Settings2 className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100" />
-                </button>
-              </div>
-            </div>
-
-            {/* My Sets Section */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between px-2">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">My Sets</h3>
-                <div className="flex items-center gap-2">
-                   <Search className="h-3.5 w-3.5 text-gray-300 cursor-pointer hover:text-black transition-colors" />
-                   <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-lg border border-gray-100">
-                      <span className="text-[10px] font-bold text-gray-400">{filteredSets.length}</span>
-                   </div>
-                </div>
-              </div>
-
-              {filteredSets.length > 0 ? (
-                <div className="space-y-2">
-                  {filteredSets.map((set) => (
+      <div className="flex-1 overflow-hidden relative flex flex-col">
+        <AnimatePresence mode="wait">
+          {showConversation && currentToolMessages.length > 0 ? (
+            <motion.div 
+              key="conversation"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="absolute inset-0 z-20 bg-white flex flex-col overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-30 shrink-0">
+                 <div className="flex items-center gap-3">
                     <button 
-                      key={set.id} 
-                      onClick={() => onSidebarTabChange?.(set.type)}
-                      className="w-full flex items-center gap-4 p-4 rounded-[24px] bg-white border border-gray-100 hover:border-gray-200 transition-all group"
+                      onClick={() => setShowConversation(false)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
                     >
-                      <div className={cn(
-                        "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm",
-                        set.type === 'quiz' ? "bg-red-50 text-red-500" : "bg-amber-50 text-amber-500"
-                      )}>
-                        {set.type === 'quiz' ? <Brain className="h-5 w-5" /> : <StickyNote className="h-5 w-5" />}
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-sm font-bold text-gray-800">{set.name}</p>
-                        <p className="text-[10px] font-medium text-gray-400 mt-0.5">{set.date}</p>
-                      </div>
-                      <MoreHorizontal className="h-4 w-4 text-gray-300" />
+                      <ChevronLeftCircle className="h-4 w-4" />
                     </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 text-center bg-gray-50/20 rounded-[32px] border border-dashed border-gray-100">
-                   <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Empty Library</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          renderActiveTool()
-        )}
-      </div>
+                    <div className="flex items-center gap-2">
+                       <Sparkles className="h-3.5 w-3.5 text-black" />
+                       <span className="text-[10px] font-black uppercase tracking-widest text-black">
+                          {activeSidebarTab} Discussion
+                       </span>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setShowConversation(false)}
+                   className="text-[10px] font-bold text-gray-400 hover:text-black transition-colors underline underline-offset-4"
+                 >
+                   Back to Tool
+                 </button>
+              </div>
 
-      {/* Large Bottom Input Section */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white/95 to-transparent pt-10">
+              <ScrollArea className="flex-1 px-6 py-6">
+                <div className="space-y-8 pb-10">
+                  {currentToolMessages.map((msg, i) => (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "flex flex-col gap-3",
+                        msg.role === 'user' ? "items-end" : "items-start"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 px-1">
+                        {msg.role === 'assistant' ? (
+                          <>
+                            <div className="w-5 h-5 rounded-lg bg-black flex items-center justify-center">
+                               <Sparkles className="h-2.5 w-2.5 text-white" />
+                            </div>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Genius AI</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">You</span>
+                            <div className="w-5 h-5 rounded-lg bg-gray-100 flex items-center justify-center">
+                               <UserIcon className="h-2.5 w-2.5 text-gray-400" />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className={cn(
+                        "max-w-[90%] p-4 rounded-2xl text-sm font-medium leading-relaxed shadow-sm",
+                        msg.role === 'user' 
+                          ? "bg-black text-white rounded-tr-none" 
+                          : "bg-gray-50 text-gray-700 rounded-tl-none border border-gray-100"
+                      )}>
+                        {msg.role === 'assistant' ? (
+                          <RichMessage content={msg.content} role={msg.role} />
+                        ) : (
+                          msg.content
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {isChatLoading && (
+                    <div className="flex flex-col items-start gap-3 animate-pulse">
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-5 h-5 rounded-lg bg-black/10 flex items-center justify-center" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Genius is thinking...</span>
+                      </div>
+                      <div className="w-[70%] h-20 bg-gray-50 rounded-2xl rounded-tl-none border border-gray-100" />
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="tool-content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 overflow-hidden"
+            >
+              <ScrollArea className="h-full">
+                <div className="p-8 space-y-8">
+                {activeSidebarTab === 'learn' ? (
+                  <>
+                    {/* Available Tools Grid */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-bold text-gray-500 px-1 opacity-70 mt-2">Generate</h3>
+                      <div className="grid grid-cols-2 gap-3 pb-8 border-b border-gray-50">
+                        {tools.map((tool) => (
+                          <button
+                            key={tool.id}
+                            onClick={() => {
+                              if (tool.id === 'video') return;
+                              onSidebarTabChange?.(tool.id);
+                            }}
+                            className={cn(
+                              "flex items-center justify-between p-3.5 rounded-2xl border transition-all hover:scale-[1.01] active:scale-[0.99] group",
+                              "bg-white border-gray-100 hover:border-gray-200 hover:shadow-md hover:shadow-black/[0.02]"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                                tool.bg, tool.color
+                              )}>
+                                {tool.icon}
+                              </div>
+                              <div className="text-left flex items-center gap-2">
+                                <p className="text-[13px] font-bold text-gray-900">{tool.name}</p>
+                                {tool.isNew && (
+                                  <span className="bg-emerald-50 text-[9px] font-black text-emerald-500 px-1.5 py-0.5 rounded-full border border-emerald-100 uppercase tracking-tighter">New</span>
+                                )}
+                              </div>
+                            </div>
+                            <Sliders className="h-3.5 w-3.5 text-gray-300 opacity-20 group-hover:opacity-40 transition-opacity" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Generated Items Section - My Sets */}
+                    <div className="space-y-4 pt-4 pb-12">
+                      <div className="flex items-center justify-between px-1">
+                        <h3 className="text-xs font-bold text-gray-500 opacity-70">My Sets</h3>
+                        <div className="flex items-center gap-3">
+                           <div className="flex items-center gap-1 opacity-40">
+                              <Sliders className="h-3.5 w-3.5" />
+                              <span className="text-[10px] font-black">1</span>
+                           </div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {sets.length > 0 ? sets.map((set) => (
+                          <button 
+                            key={set.id} 
+                            onClick={() => onSidebarTabChange?.(set.type)}
+                            className="w-full flex items-center gap-4 p-4 rounded-3xl bg-white border border-gray-50 hover:border-gray-100 hover:shadow-md hover:shadow-black/[0.02] transition-all group"
+                          >
+                            <div className={cn(
+                              "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
+                              set.type === 'quiz' ? "bg-red-50 text-red-500" : 
+                              set.type === 'roadmap' ? "bg-emerald-50 text-emerald-500" :
+                              set.type === 'flashcards' ? "bg-amber-50 text-amber-500" :
+                              set.type === 'summary' ? "bg-blue-50 text-blue-500" :
+                              "bg-indigo-50 text-indigo-500"
+                            )}>
+                               {set.type === 'quiz' ? <HelpCircle className="h-5 w-5" /> : 
+                                set.type === 'roadmap' ? <Target className="h-5 w-5" /> :
+                                set.type === 'flashcards' ? <Layers className="h-5 w-5" /> :
+                                set.type === 'summary' ? <FileText className="h-5 w-5" /> :
+                                <Headphones className="h-5 w-5" />}
+                            </div>
+                            <div className="flex-1 text-left">
+                              <p className="text-[13px] font-black text-gray-800 line-clamp-1">{set.name}</p>
+                              <p className="text-[10px] font-bold text-gray-400 mt-0.5 opacity-80 uppercase tracking-tighter">
+                                  {set.type === 'quiz' ? '10 questions left • All topics' : 
+                                   set.type === 'summary' ? 'Detailed Summary • All topics' :
+                                   set.type === 'roadmap' ? 'Personalized Learning Path' :
+                                   'Processed Analysis'}
+                              </p>
+                            </div>
+                            <MoreVertical className="h-4 w-4 text-gray-300 opacity-40" />
+                          </button>
+                        )) : (
+                          <div className="p-10 text-center space-y-3 grayscale opacity-30">
+                             <div className="w-16 h-16 rounded-[2.5rem] bg-gray-50 border border-gray-200 mx-auto flex items-center justify-center">
+                                <LayoutGrid className="h-8 w-8 text-gray-300" />
+                             </div>
+                             <p className="text-xs font-bold text-gray-400">Generate your first set to see it here.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="pb-12">
+                    {renderActiveTool()}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+
+      {/* Large Bottom Input Section - Fixed at bottom */}
+      <div className="p-6 pt-2 bg-white border-t border-gray-50 shrink-0">
+         <div className="flex items-center justify-between mb-4 px-2">
+            <div className="flex items-center gap-2">
+               <span className="text-[10px] font-bold text-gray-400 tracking-tight">Chatting in:</span>
+               <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100">
+                  <div className="w-1.5 h-1.5 rounded-full bg-black/40" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-black/60">New Chat</span>
+               </div>
+            </div>
+            <div className="flex items-center gap-4 opacity-30 hover:opacity-100 transition-opacity">
+               <Plus className="h-4 w-4 cursor-pointer" />
+               <History className="h-4 w-4 cursor-pointer" />
+            </div>
+         </div>
+
          <div className="relative group">
             <textarea 
                value={askInput}
                onChange={(e) => setAskInput(e.target.value)}
                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleAsk())}
                placeholder="Ask anything"
-               className="w-full h-16 bg-gray-50/50 border border-gray-100 rounded-[2rem] pl-6 pr-24 py-5 text-sm font-medium focus:outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-black/5 transition-all scrollbar-none resize-none"
+               className="w-full h-14 bg-gray-50/50 border border-gray-100 rounded-3xl pl-6 pr-24 py-4 text-sm font-bold placeholder:text-gray-300 focus:outline-none focus:bg-white focus:border-gray-200 focus:ring-8 focus:ring-black/[0.02] transition-all scrollbar-none resize-none"
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+            <div className="absolute right-2 top-1/2 -translate-y-1/2">
                <button 
                   onClick={handleAsk}
-                  className="bg-black text-white p-2.5 rounded-2xl shadow-xl shadow-black/10 hover:scale-105 transition-all"
+                  className="bg-black text-white flex items-center gap-2 pl-4 pr-3 py-2 rounded-2xl shadow-xl shadow-black/10 hover:scale-[1.02] transition-all active:scale-[0.98]"
                >
-                  <Mic className="h-4 w-4" />
-                  <span className="sr-only">Voice</span>
+                  <Mic className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-black uppercase tracking-widest -mb-0.5">Voice</span>
                </button>
-               <div className="bg-black text-[10px] font-bold text-white px-3 py-2 rounded-2xl">Voice</div>
             </div>
          </div>
       </div>
