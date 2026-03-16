@@ -77,6 +77,16 @@ async def chat_with_video(
             "- Help the user understand the reasoning behind specific quiz questions.\n"
             "- Use [VISUAL:Chart] if illustrating probability or statistical concepts."
         ),
+        "quiz_hint": (
+            "MISSION: Quiz Hint Provider.\n"
+            "- Provide a subtle, helpful hint for the quiz question without explicitly revealing the answer.\n"
+            "- CRITICAL: Be extremely concise (1-2 sentences). NO preambles, NO introductory filler like 'Here is a hint' or 'Based on the video'. Start the answer immediately."
+        ),
+        "quiz_explain": (
+            "MISSION: Quiz Concept Explainer.\n"
+            "- Explain the logic or core concept behind the quiz question or why a specific answer is correct.\n"
+            "- Be direct and educational. Avoid long-winded introductions."
+        ),
         "roadmap": (
             "MISSION: Learning Concierge.\n"
             "- Guide the user through the learning steps.\n"
@@ -117,7 +127,8 @@ async def chat_with_video(
         "### CORE OPERATING GUIDELINES:\n"
         "1. **Primary Grounding**: Your knowledge is strictly grounded in the provided VIDEO CONTEXT.\n"
         "2. **Tool-Specific Priority**: If [SPECIFIC TOOL CONTEXT] is provided, focus your answer on that data first.\n"
-        "3. **No Meta-Talk**: Avoid phrases like 'Based on the context'. Just answer directly as an expert assistant.\n\n"
+        "3. **No Meta-Talk**: Avoid phrases like 'Based on the context'. Just answer directly as an expert assistant.\n"
+        "4. **Instant Answers**: NEVER start with conversational filler. No 'Sure!', 'I can help with that', or 'Here is the answer'. Jump straight into the content.\n\n"
         "### CONTEXT DATA:\n"
         f"VIDEO TRANSCRIPT CHUNKS:\n{context}"
         f"{additional_context}"
