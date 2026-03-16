@@ -27,6 +27,8 @@ interface AnalysisContextValue {
   setContextSnippet: (snippet: string | null) => void;
   aiExplanation: string | null;
   setAiExplanation: (explanation: string | null) => void;
+  quizAIExplanation: string | null;
+  setQuizAIExplanation: (explanation: string | null) => void;
   generatingTools: string[];
   handleSubmit: (urls: string[], options?: any) => Promise<void>;
   handleSendMessage: (content: string, forcedContext?: string | null, toolId?: string | null) => Promise<void>;
@@ -65,6 +67,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [contextSnippet, setContextSnippet] = useState<string | null>(null);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [quizAIExplanation, setQuizAIExplanation] = useState<string | null>(null);
   const [generatingTools, setGeneratingTools] = useState<string[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [analysisStyle, setAnalysisStyle] = useState("");
@@ -254,6 +257,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setIsChatLoading(true);
     setContextSnippet(null);
     if (toolId === 'explain') setAiExplanation("");
+    if (toolId === 'quiz_hint' || toolId === 'quiz_explain') setQuizAIExplanation("");
 
     try {
       if (activeAnalysisId) {
@@ -301,6 +305,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
                     return newChat;
                   });
                   if (toolId === 'explain') setAiExplanation(assistantMsgContent);
+                  if (toolId === 'quiz_hint' || toolId === 'quiz_explain') setQuizAIExplanation(assistantMsgContent);
                 }
               } catch (e) {
                 logger.warn("Error parsing chunk", e);
@@ -604,6 +609,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setContextSnippet,
         aiExplanation,
         setAiExplanation,
+        quizAIExplanation,
+        setQuizAIExplanation,
         generatingTools,
         handleSubmit,
         handleSendMessage,

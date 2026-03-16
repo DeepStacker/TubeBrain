@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, X, ChevronRight, Brain, RotateCcw, Trophy, ArrowRight, Lightbulb, Baby, Footprints, HelpCircle, Send, Mic } from "lucide-react";
+import { Check, X, ChevronRight, Brain, RotateCcw, Trophy, ArrowRight, Lightbulb, Baby, Footprints, HelpCircle, Send, Mic, Keyboard, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -14,15 +14,44 @@ interface QuizQuestion {
 interface QuizTabProps {
   quiz: QuizQuestion[];
   onAIAction?: (action: string, context: string) => void;
+  onGenerateMore?: () => void;
+  isGenerating?: boolean;
+  quizAIExplanation?: string | null;
+  onClearExplanation?: () => void;
 }
 
-const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
+const QuizTab = ({ 
+  quiz: initialQuiz, 
+  onAIAction, 
+  onGenerateMore, 
+  isGenerating,
+  quizAIExplanation,
+  onClearExplanation
+}: QuizTabProps) => {
+  const [quiz, setQuiz] = useState(initialQuiz);
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [lastCount, setLastCount] = useState(initialQuiz.length);
+  const [showAdditionBadge, setShowAdditionBadge] = useState(false);
+
+  useEffect(() => {
+    if (initialQuiz.length > lastCount) {
+      setShowAdditionBadge(true);
+      setTimeout(() => setShowAdditionBadge(false), 3000);
+      setLastCount(initialQuiz.length);
+    }
+    setQuiz(initialQuiz);
+    onClearExplanation?.();
+  }, [initialQuiz, lastCount, onClearExplanation]);
+
+  useEffect(() => {
+    onClearExplanation?.();
+  }, [current, onClearExplanation]);
 
   const handleSelect = (idx: number) => {
     if (selected !== null) return;
@@ -33,14 +62,14 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
     setAnswers(newAnswers);
   };
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (current + 1 >= quiz.length) {
       setFinished(true);
     } else {
       setCurrent(c => c + 1);
       setSelected(null);
     }
-  };
+  }, [current, quiz.length]);
 
   const handleRestart = () => {
     setCurrent(0);
@@ -48,7 +77,53 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
     setScore(0);
     setFinished(false);
     setAnswers([]);
+    onClearExplanation?.();
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      const isInput = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName);
+      if (isInput) return;
+
+      if (finished) {
+        if (e.key.toLowerCase() === 'r') handleRestart();
+        return;
+      }
+
+      // Selection shortcuts 1-4
+      if (selected === null && e.key >= '1' && e.key <= (Math.min(quiz[current].options.length, 4).toString())) {
+        handleSelect(parseInt(e.key) - 1);
+        return;
+      }
+
+      switch(e.key.toLowerCase()) {
+        case 'enter':
+          if (selected !== null) handleNext();
+          break;
+        case 'h':
+          onAIAction?.('quiz_hint', quiz[current].question);
+          break;
+        case 'e':
+        case 'w':
+          onAIAction?.('quiz_explain', quiz[current].question);
+          break;
+        case 'r':
+          handleRestart();
+          break;
+        case 'k':
+          setShowShortcuts(prev => !prev);
+          break;
+        case 'g':
+        case '+':
+          if (!isGenerating) onGenerateMore?.();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [current, selected, finished, quiz, isGenerating, onAIAction, onGenerateMore, handleNext]);
 
   if (!quiz || quiz.length === 0) {
     return (
@@ -77,9 +152,22 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
           </div>
           <p className="text-xs font-medium text-muted-foreground">{pct}% accuracy</p>
         </div>
-        <div className="mt-10">
-          <Button variant="outline" onClick={handleRestart} className="gap-2 h-12 px-8 rounded-2xl font-bold border-gray-200">
+        <div className="mt-10 flex flex-col gap-3 max-w-[280px] mx-auto">
+          <Button onClick={handleRestart} className="h-14 rounded-2xl bg-black text-white font-bold gap-2">
             <RotateCcw className="h-4 w-4" /> Try Again
+          </Button>
+          <Button 
+            variant="outline"
+            disabled={isGenerating}
+            onClick={onGenerateMore}
+            className="h-14 rounded-2xl border-gray-200 font-bold gap-2 hover:bg-gray-50 transition-all"
+          >
+            {isGenerating ? (
+              <div className="w-4 h-4 border-2 border-gray-300 border-t-black animate-spin rounded-full" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            Generate 5 More
           </Button>
         </div>
       </motion.div>
@@ -90,7 +178,96 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
 
   return (
     <motion.div key={current} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-8">
-      {/* Progress bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full border-4 border-black border-r-transparent flex items-center justify-center">
+                <span className="text-[10px] font-black">{Math.round(((current) / quiz.length) * 100)}%</span>
+            </div>
+            <div>
+                <h3 className="text-xs font-bold">Quiz Progress</h3>
+                <div className="flex items-center gap-1.5 overflow-hidden">
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter shrink-0">{quiz.length} Total Questions</p>
+                    <AnimatePresence>
+                    {showAdditionBadge && (
+                        <motion.span 
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: 10, opacity: 0 }}
+                        className="text-[8px] font-black bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md uppercase shrink-0 whitespace-nowrap"
+                        >
+                        +{quiz.length - lastCount} New Added
+                        </motion.span>
+                    )}
+                    </AnimatePresence>
+                </div>
+            </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowShortcuts(!showShortcuts)}
+                className={cn(
+                    "h-8 px-2 rounded-lg bg-gray-50 border border-gray-100 transition-colors",
+                    showShortcuts && "bg-black text-white"
+                )}
+            >
+                <Keyboard className="h-3.5 w-3.5" />
+            </Button>
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleRestart}
+                className="h-8 w-8 p-0 rounded-lg bg-gray-50 border border-gray-100"
+            >
+                <RotateCcw className="h-3.5 w-3.5 text-gray-500" />
+            </Button>
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                disabled={isGenerating}
+                onClick={() => onGenerateMore?.()}
+                className="h-8 px-3 rounded-lg bg-black text-white text-[10px] font-bold gap-1.5"
+            >
+                {isGenerating ? (
+                    <div className="w-2.5 h-2.5 border border-white/30 border-t-white animate-spin rounded-full" />
+                ) : (
+                    <Plus className="h-3 w-3" />
+                )}
+                More
+            </Button>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showShortcuts && (
+            <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+            >
+            <div className="p-4 bg-black rounded-[2rem] border border-white/10 grid grid-cols-2 gap-x-6 gap-y-2 mt-2">
+                {[
+                    { k: "1-4", l: "Select Option" },
+                    { k: "Enter", l: "Next Question" },
+                    { k: "H", l: "Hint" },
+                    { k: "E", l: "Explain" },
+                    { k: "W", l: "Walkthrough" },
+                    { k: "R", l: "Reset Quiz" },
+                    { k: "G / +", l: "Add Questions" },
+                    { k: "K", l: "Shortcuts" }
+                ].map(s => (
+                    <div key={s.l} className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">{s.l}</span>
+                    <code className="text-[10px] font-black bg-white/10 px-1.5 py-0.5 rounded-md text-white">{s.k}</code>
+                    </div>
+                ))}
+            </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center gap-4">
         <div className="flex-1 h-1.5 bg-gray-50 rounded-full overflow-hidden border">
           <motion.div 
@@ -111,7 +288,7 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
            <Button 
              variant="outline" 
              size="sm" 
-             onClick={() => onAIAction?.('hint', q.question)}
+             onClick={() => onAIAction?.('quiz_hint', q.question)}
              className="h-8 rounded-full text-[10px] font-bold gap-1.5 border-indigo-100 bg-indigo-50/30 text-indigo-600 hover:bg-indigo-50"
            >
              <Lightbulb className="h-3 w-3" /> Hint
@@ -119,7 +296,7 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
            <Button 
              variant="outline" 
              size="sm" 
-             onClick={() => onAIAction?.('explain', q.question)}
+             onClick={() => onAIAction?.('quiz_explain', q.question)}
              className="h-8 rounded-full text-[10px] font-bold gap-1.5 border-purple-100 bg-purple-50/30 text-purple-600 hover:bg-purple-50"
            >
              <Baby className="h-3 w-3" /> Explain like I'm 5
@@ -127,12 +304,36 @@ const QuizTab = ({ quiz, onAIAction }: QuizTabProps) => {
            <Button 
              variant="outline" 
              size="sm" 
-             onClick={() => onAIAction?.('walkthrough', q.question)}
+             onClick={() => onAIAction?.('quiz_explain', `Walk me through this question: ${q.question}`)}
              className="h-8 rounded-full text-[10px] font-bold gap-1.5 border-emerald-100 bg-emerald-50/30 text-emerald-600 hover:bg-emerald-50"
            >
              <Footprints className="h-3 w-3" /> Walk me through it
            </Button>
         </div>
+
+        <AnimatePresence>
+          {quizAIExplanation && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4 p-5 bg-black rounded-[2.5rem] border border-white/10 relative overflow-hidden group"
+            >
+               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 opacity-50" />
+               <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3 bg-white/10 w-fit px-3 py-1 rounded-full border border-white/10">
+                    <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                    <span className="text-[8px] font-black uppercase tracking-widest text-amber-100">Genius Breakdown</span>
+                  </div>
+                  <div className="prose prose-invert prose-xs max-w-none">
+                    <p className="text-[12px] font-medium leading-relaxed text-gray-200">
+                      {quizAIExplanation}
+                    </p>
+                  </div>
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Options */}

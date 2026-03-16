@@ -40,6 +40,8 @@ export default function AnalysisPage() {
     setContextSnippet,
     aiExplanation,
     setAiExplanation,
+    quizAIExplanation,
+    setQuizAIExplanation,
     handleTimestampClick,
     handleToolClick,
     handleGenerateTool,
@@ -328,7 +330,11 @@ export default function AnalysisPage() {
                   timestamps={summaryData?.timestamps}
                   onAIAction={handleToolClick}
                   aiExplanation={aiExplanation}
-                  onClearExplanation={() => setAiExplanation(null)}
+                  quizAIExplanation={quizAIExplanation}
+                  onClearExplanation={() => {
+                    setAiExplanation(null);
+                    setQuizAIExplanation(null);
+                  }}
                   sets={sets}
                 />
               </div>
@@ -405,7 +411,11 @@ export default function AnalysisPage() {
                     timestamps={summaryData?.timestamps}
                     onAIAction={handleToolClick}
                     aiExplanation={aiExplanation}
-                    onClearExplanation={() => setAiExplanation(null)}
+                    quizAIExplanation={quizAIExplanation}
+                    onClearExplanation={() => {
+                      setAiExplanation(null);
+                      setQuizAIExplanation(null);
+                    }}
                     sets={sets}
                   />
                 </motion.div>

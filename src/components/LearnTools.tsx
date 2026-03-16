@@ -79,6 +79,7 @@ interface LearnToolsProps {
   onTimestampClick?: (seconds: number) => void;
   timestamps?: Timestamp[];
   aiExplanation?: string | null;
+  quizAIExplanation?: string | null;
   onClearExplanation?: () => void;
   onMaximize?: () => void;
   isMaximized?: boolean;
@@ -113,6 +114,7 @@ const LearnTools = ({
   onMaximize,
   isMaximized,
   aiExplanation,
+  quizAIExplanation,
   onClearExplanation,
 }: LearnToolsProps) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -276,15 +278,11 @@ const LearnTools = ({
             <div className="sidebar-quiz-container scale-[0.85] origin-top -mt-4">
               <QuizTab 
                 quiz={quizData} 
-                onAIAction={(action, context) => {
-                  let prompt = context;
-                  if (action === 'hint') prompt = `Give me a helpful hint for this question: "${context}". Don't give me the answer directly.`;
-                  if (action === 'explain') prompt = `Explain the concept behind this question like I'm 5 years old: "${context}"`;
-                  if (action === 'walkthrough') prompt = `Walk me through the logical steps to arrive at the correct answer for this question: "${context}"`;
-                  onAIAction?.(action, prompt);
-                  // Also trigger the 'ask' tool click to open chat if needed
-                  onToolClick(activeSidebarTab, prompt, context);
-                }}
+                onAIAction={onAIAction}
+                onGenerateMore={() => onGenerate?.('quiz', true)}
+                isGenerating={generatingTools.includes('quiz')}
+                quizAIExplanation={quizAIExplanation}
+                onClearExplanation={onClearExplanation}
               />
             </div>
           </Suspense>
