@@ -37,7 +37,7 @@ interface SidebarProps {
   onCreateSpace?: (name: string) => void;
   onRenameSpace?: (id: string, name: string) => void;
   onDeleteSpace?: (id: string) => void;
-  user: any;
+  user: { name?: string; email?: string; avatar_url?: string } | null;
   credits: number | null;
   onLogout: () => void;
   onAuthSuccess: () => void;
@@ -124,7 +124,7 @@ const Sidebar = ({
       </div>
 
       {/* Nav */}
-      <nav className="px-3 space-y-0.5 mb-2">
+      <nav className="px-3 space-y-0.5 mb-2" aria-label="Main navigation">
         {navItems.map((item) => (
           <button 
             key={item.name}
@@ -143,7 +143,7 @@ const Sidebar = ({
       </nav>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto scrollbar-none px-3 pb-4">
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-4">
         {/* Recents */}
         {user && (
           <div className="mb-4">
