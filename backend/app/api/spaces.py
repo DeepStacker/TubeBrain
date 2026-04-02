@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, distinct, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
@@ -55,9 +55,9 @@ async def list_spaces(
     result = await db.execute(
         select(
             Space,
-            func.count(SpaceVideo.id).distinct().label("video_count"),
-            func.count(SpaceDocument.id).distinct().label("document_count"),
-            func.count(Note.id).distinct().label("note_count"),
+            func.count(distinct(SpaceVideo.id)).label("video_count"),
+            func.count(distinct(SpaceDocument.id)).label("document_count"),
+            func.count(distinct(Note.id)).label("note_count"),
         )
         .outerjoin(SpaceVideo, SpaceVideo.space_id == Space.id)
         .outerjoin(SpaceDocument, SpaceDocument.space_id == Space.id)
@@ -74,10 +74,13 @@ async def list_spaces(
             name=space.name,
             description=space.description,
             is_public=space.is_public,
-            video_count=video_count,
-            document_count=document_count,
-            note_count=note_count,
-            video_ids=[sv.video.platform_id or str(sv.video_id) for sv in space.space_videos],
+            video_count=video_count or 0,
+            document_count=document_count or 0,
+            note_count=note_count or 0,
+            video_ids=[
+                (sv.video.platform_id if sv.video else str(sv.video_id)) 
+                for sv in space.space_videos if sv is not None
+            ],
             created_at=space.created_at,
         )
         for space, video_count, document_count, note_count in result.all()
@@ -108,7 +111,8 @@ async def get_space_videos(
         .where(SpaceVideo.space_id == id_uuid)
         .order_by(SpaceVideo.added_at.desc())
     )
-    return result.scalars().all()
+    videos = result.scalars().all()
+    return videos
 
 
 @router.post("/{space_id}/videos", response_model=MessageResponse)
@@ -154,31 +158,72 @@ async def add_video_to_space(
         raise HTTPException(status_code=400, detail="Video already in space")
 
     db.add(SpaceVideo(space_id=id_uuid, video_id=video_db_id))
+    await db.commit()
     return MessageResponse(message="Video added to space")
 
 
 @router.delete("/{space_id}/videos/{video_id}", response_model=MessageResponse)
 async def remove_video_from_space(
     space_id: str,
-    video_id: UUID,
+    video_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Remove a video from a space. Supports Video ID, Analysis ID, or Platform ID."""
     try:
         id_uuid = UUID(space_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Space not found")
 
+    # Verify ownership
+    space_result = await db.execute(
+        select(Space).where(Space.id == id_uuid, Space.user_id == user.id)
+    )
+    if not space_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Space not found")
+
+    # Robust video_id resolution
+    video_db_id = None
+    try:
+        potential_uuid = UUID(video_id)
+        # 1. Check if it's a direct Video ID
+        v_res = await db.execute(select(Video.id).where(Video.id == potential_uuid))
+        v_id = v_res.scalar_one_or_none()
+        if v_id:
+            video_db_id = v_id
+        else:
+            # 2. Check if it's an Analysis ID
+            a_res = await db.execute(select(Analysis.video_id).where(Analysis.id == potential_uuid))
+            video_db_id = a_res.scalar_one_or_none()
+            
+            # 3. Check if it's a direct SpaceVideo ID
+            if not video_db_id:
+                sv_res = await db.execute(select(SpaceVideo.video_id).where(SpaceVideo.id == potential_uuid))
+                video_db_id = sv_res.scalar_one_or_none()
+    except ValueError:
+        # Not a UUID, try platform_id
+        pass
+
+    # 4. Try platform_id search (either directly or via fallback)
+    if not video_db_id:
+        v_res = await db.execute(select(Video.id).where(Video.platform_id == video_id))
+        video_db_id = v_res.scalar_one_or_none()
+
+    if not video_db_id:
+        raise HTTPException(status_code=404, detail=f"Target video '{video_id}' not found")
+
     result = await db.execute(
         select(SpaceVideo).where(
-            SpaceVideo.space_id == id_uuid, SpaceVideo.video_id == video_id
+            SpaceVideo.space_id == id_uuid, 
+            SpaceVideo.video_id == video_db_id
         )
     )
     sv = result.scalar_one_or_none()
     if not sv:
-        raise HTTPException(status_code=404, detail="Video not in space")
+        raise HTTPException(status_code=404, detail="Video relation not found in this space")
 
     await db.delete(sv)
+    await db.commit()
     return MessageResponse(message="Video removed from space")
 
 
@@ -210,21 +255,39 @@ async def update_space(
     await db.commit()
     await db.refresh(space)
 
-    # Re-fetch with video count
-    res = await db.execute(
-        select(func.count(SpaceVideo.id)).where(SpaceVideo.space_id == space.id)
+    # Re-fetch with fresh counts & relations
+    res_counts = await db.execute(
+        select(
+            func.count(distinct(SpaceVideo.id)).label("v"),
+            func.count(distinct(SpaceDocument.id)).label("d"),
+            func.count(distinct(Note.id)).label("n")
+        )
+        .outerjoin(SpaceVideo, SpaceVideo.space_id == space.id)
+        .outerjoin(SpaceDocument, SpaceDocument.space_id == space.id)
+        .outerjoin(Note, Note.space_id == space.id)
+        .where(Space.id == space.id)
+        .group_by(Space.id)
     )
-    video_count = res.scalar() or 0
+    counts = res_counts.one_or_none()
+    v_count, d_count, n_count = counts if counts else (0,0,0)
+
+    # Reload videos for the response
+    res_vids = await db.execute(
+        select(Video.platform_id, Video.id)
+        .join(SpaceVideo, SpaceVideo.video_id == Video.id)
+        .where(SpaceVideo.space_id == space.id)
+    )
+    v_ids = [ (row.platform_id or str(row.id)) for row in res_vids.all() ]
 
     return SpaceResponse(
         id=space.id,
         name=space.name,
         description=space.description,
         is_public=space.is_public,
-        video_count=video_count,
-        document_count=getattr(space, 'document_count', 0), # Simplified for patch
-        note_count=getattr(space, 'note_count', 0),
-        video_ids=[sv.video.platform_id or str(sv.video_id) for sv in space.space_videos],
+        video_count=v_count,
+        document_count=d_count,
+        note_count=n_count,
+        video_ids=v_ids,
         created_at=space.created_at,
     )
 
@@ -247,9 +310,16 @@ async def delete_space(
     if not space:
         raise HTTPException(status_code=404, detail="Space not found")
 
+    # 1. Clean up materials explicitly (even with cascade orphan delete)
+    await db.execute(text("DELETE FROM space_videos WHERE space_id = :sid"), {"sid": id_uuid})
+    await db.execute(text("DELETE FROM space_documents WHERE space_id = :sid"), {"sid": id_uuid})
+    await db.execute(text("DELETE FROM notes WHERE space_id = :sid"), {"sid": id_uuid})
+    await db.execute(text("DELETE FROM chat_messages WHERE space_id = :sid"), {"sid": id_uuid})
+
+    # 2. Finally delete space
     await db.delete(space)
     await db.commit()
-    return MessageResponse(message="Space deleted")
+    return MessageResponse(message="Space deleted successfully")
 
 # ──────────────────────────────────────────────
 # NEW MATERIAL ENDPOINTS
@@ -320,6 +390,13 @@ async def remove_document_from_space(
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a document from a space."""
+    # Verify ownership
+    space_check = await db.execute(
+        select(Space.id).where(Space.id == space_id, Space.user_id == user.id)
+    )
+    if not space_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Space not found")
+
     result = await db.execute(
         select(SpaceDocument).where(
             SpaceDocument.space_id == space_id, SpaceDocument.document_id == doc_id
@@ -353,6 +430,13 @@ async def create_note_in_space(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new note within a space."""
+    # Verify ownership
+    space_check = await db.execute(
+        select(Space.id).where(Space.id == space_id, Space.user_id == user.id)
+    )
+    if not space_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Space not found")
+
     note = Note(
         user_id=user.id,
         space_id=space_id,

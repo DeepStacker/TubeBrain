@@ -196,8 +196,11 @@ export const deleteHistory = async (id: string, backend_id?: string) => {
   localStorage.setItem(STORE.HISTORY, JSON.stringify(updatedHistory));
 
   const token = getAuthToken();
-  if (token && backend_id) {
-    apiFetch(`/api/analysis/${backend_id}`, { method: "DELETE" }).catch(console.error);
+  // History items from API use their backend UUID as the main 'id'
+  const targetId = backend_id || id;
+  
+  if (token && targetId) {
+    apiFetch(`/api/analysis/${targetId}`, { method: "DELETE" }).catch(console.error);
   }
 };
 
@@ -224,7 +227,7 @@ export const fetchSpaces = async (): Promise<Space[]> => {
   if (!token) return [];
 
   try {
-    const res = await apiFetch("/api/spaces");
+    const res = await apiFetch("/api/spaces/");
     if (res.ok) {
       const data = await res.json();
       const backendSpaces = data.map((s: any) => ({
@@ -251,7 +254,7 @@ export const createSpace = async (name: string): Promise<Space | null> => {
 
   let backendSpace = null;
   try {
-    const res = await apiFetch("/api/spaces", {
+    const res = await apiFetch("/api/spaces/", {
       method: "POST",
       body: JSON.stringify({ name, description: "" })
     });
@@ -319,7 +322,7 @@ export const removeVideoFromSpace = async (spaceId: string, videoId: string) => 
 
 export const renameSpace = async (id: string, name: string) => {
   const token = getAuthToken();
-  if (token && id.match(UUID_PATTERN)) {
+  if (token) {
     try {
       await apiFetch(`/api/spaces/${id}`, {
         method: "PATCH",
@@ -337,7 +340,7 @@ export const renameSpace = async (id: string, name: string) => {
 
 export const deleteSpace = async (id: string) => {
   const token = getAuthToken();
-  if (token && id.match(UUID_PATTERN)) {
+  if (token) {
     try {
       await apiFetch(`/api/spaces/${id}`, { method: "DELETE" });
     } catch (e) {

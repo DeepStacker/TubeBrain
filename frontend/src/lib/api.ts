@@ -126,8 +126,6 @@ export const analysisApi = {
   getStatus: (analysisId: string) => apiFetch(`/api/analysis/${analysisId}/status`),
   generateTool: (analysisId: string, toolType: string, append: boolean = false, force: boolean = false) =>
     apiFetch(`/api/analysis/${analysisId}/generate?tool_type=${toolType}${append ? '&append=true' : ''}${force ? '&force=true' : ''}`, { method: "POST" }),
-  deleteHistory: (id: string) => apiFetch(`/api/videos/history/${id}`, { method: "DELETE" }),
-  clearHistory: () => apiFetch("/api/videos/history/clear", { method: "DELETE" }),
   regenerate: (id: string, data: any) => apiFetch(`/api/analysis/${id}/regenerate`, { method: "POST", body: JSON.stringify(data) }),
 };
 

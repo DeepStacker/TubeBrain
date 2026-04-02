@@ -151,7 +151,8 @@ async def process_video_analysis(
                         if match:
                             platform_id = match.group(1)
 
-                    logger.info(f"DEBUG [{vid_uuid}]: Starting metadata extraction for {platform_id}")
+                    logger.info(f"[{vid_uuid}] Starting metadata extraction for {platform_id}")
+                    
                     # Step 1: Metadata
                     try:
                         metadata = await extract_metadata(platform_id)
@@ -164,11 +165,11 @@ async def process_video_analysis(
                         video.published_at = metadata.get("published_at")
                         video.thumbnail_url = metadata.get("thumbnail_url")
                         video.language = metadata.get("language")
-                        video.progress_percentage = 20
+                        video.progress_percentage = 15
                         await vid_db.commit()
-                        logger.info(f"DEBUG [{vid_uuid}]: Metadata updated: {video.title}")
+                        logger.info(f"[{vid_uuid}] Metadata updated: {video.title}")
                     except Exception as e:
-                        logger.warning(f"DEBUG [{vid_uuid}]: Metadata extraction failed: {e}")
+                        logger.warning(f"[{vid_uuid}] Metadata extraction failed: {e}")
                         metadata = {}
 
                     # Check if transcript already exists to skip duplicate extraction
@@ -176,13 +177,9 @@ async def process_video_analysis(
                         select(Transcript).where(Transcript.video_id == vid_uuid)
                     )
                     existing = existing_transcript.scalar_one_or_none()
-                    logger.info(f"DEBUG [{vid_uuid}]: Checking existing transcript...", )
-
-                    if existing:
-                        logger.info(f"DEBUG [{vid_uuid}]: Existing record found. Word count: {existing.word_count}", )
                     
                     if existing and existing.full_text and getattr(existing, 'word_count', 0) and existing.word_count > 50:
-                        logger.info(f"DEBUG [{vid_uuid}]: Using cache path...", )
+                        logger.info(f"[{vid_uuid}] Using cached transcript ({existing.word_count} words)")
                         class CachedSegment:
                             def __init__(self, start, end, text):
                                 self.start = start
@@ -199,7 +196,7 @@ async def process_video_analysis(
 
                         transcript_result = CachedResult(
                             full_text=existing.full_text,
-                            segments=[CachedSegment(t.get("start", 0), t.get("end", 0), t.get("text", "")) for t in existing.timestamps_json],
+                            segments=[CachedSegment(t.get("start", 0), t.get("end", 0), t.get("text", "")) for t in existing.timestamps_json or []],
                             language=existing.language or "en",
                             source=existing.source or "cache",
                             word_count=existing.word_count,
@@ -207,27 +204,39 @@ async def process_video_analysis(
                         video.progress_percentage = 100
                         video.status = "ready"
                         await vid_db.commit()
-                        logger.info(f"DEBUG [{vid_uuid}]: Cache path complete.", )
                     else:
-                        logger.info(f"DEBUG [{vid_uuid}]: Entering extraction path...", )
-                        # Step 2: Extract transcript
+                        logger.info(f"[{vid_uuid}] Extracting transcript...")
+                        
+                        # Progress callback for transcript extraction
+                        async def transcript_progress(stage: int, total: int, msg: str):
+                            # Map stage 1-6 to progress 20-50
+                            progress = 20 + int((stage / total) * 30)
+                            video.progress_percentage = progress
+                            await vid_db.commit()
+                        
+                        # Step 2: Extract transcript with progress reporting
                         try:
-                            transcript_result = await transcript_engine.extract(platform_id)
-                            video.progress_percentage = 50
+                            transcript_result = await transcript_engine.extract(
+                                platform_id, 
+                                progress_callback=transcript_progress
+                            )
+                            video.progress_percentage = 55
                             await vid_db.commit()
                         except Exception as e:
-                            logger.error(f"Transcript extraction failed for {platform_id}: {e}")
+                            logger.error(f"[{vid_uuid}] Transcript extraction failed: {e}")
                             video.status = "failed"
                             video.error_message = str(e)
                             await vid_db.commit()
                             return None, None
 
                         # Store transcript (upsert)
-                        # Do a fresh check for existing transcript to avoid race conditions or stale state
                         fresh_transcript_result = await vid_db.execute(
                             select(Transcript).where(Transcript.video_id == vid_uuid)
                         )
                         fresh_existing = fresh_transcript_result.scalar_one_or_none()
+                        
+                        video.progress_percentage = 60
+                        await vid_db.commit()
                         
                         if fresh_existing:
                             fresh_existing.full_text = transcript_result.full_text
@@ -252,16 +261,27 @@ async def process_video_analysis(
                             )
                             vid_db.add(transcript_record)
                         
-                        await vid_db.flush() # Ensure it's pushed to DB before we delete chunks
+                        await vid_db.flush()
 
                         # Clear any existing chunks to prevent duplicates
                         from sqlalchemy import delete
                         await vid_db.execute(delete(TranscriptChunk).where(TranscriptChunk.video_id == vid_uuid))
 
+                        video.progress_percentage = 70
+                        await vid_db.commit()
+                        
                         # Step 3: Chunk and Embed
+                        logger.info(f"[{vid_uuid}] Chunking and embedding transcript...")
                         chunks = chunk_transcript(transcript_result.full_text)
                         chunk_texts = [c["text"] for c in chunks]
+                        
+                        video.progress_percentage = 80
+                        await vid_db.commit()
+                        
                         embeddings = await generate_embeddings(chunk_texts)
+
+                        video.progress_percentage = 90
+                        await vid_db.commit()
 
                         for chunk_data, embedding in zip(chunks, embeddings):
                             chunk_record = TranscriptChunk(
@@ -278,6 +298,7 @@ async def process_video_analysis(
                         video.status = "ready"
                         video.progress_percentage = 100
                         await vid_db.commit()
+                        logger.info(f"[{vid_uuid}] Video processing complete")
 
                     return f'[Video: "{video.title}"]\n{transcript_result.full_text}', metadata
 
@@ -511,10 +532,15 @@ async def process_document(
 
 
 async def _extract_text_from_file(file_path: str, file_type: str) -> str | None:
-    """Helper to extract text based on file type."""
+    """Helper to extract text based on file type. Handles missing optional dependencies gracefully."""
     try:
         if file_type == "pdf":
-            from pypdf import PdfReader
+            try:
+                from pypdf import PdfReader
+            except ImportError:
+                logger.error("pypdf not installed. Install with: pip install pypdf")
+                return None
+                
             reader = PdfReader(file_path)
             text = ""
             for page in reader.pages:
@@ -522,12 +548,10 @@ async def _extract_text_from_file(file_path: str, file_type: str) -> str | None:
             
             # OCR Fallback if text is too short (likely a scanned document)
             if len(text.strip()) < 50:
-                logger.info(f"PDF text extraction minimal ({len(text.strip())} chars). Falling back to OCR...")
+                logger.info(f"PDF text extraction minimal ({len(text.strip())} chars). Attempting OCR...")
                 try:
                     from pdf2image import convert_from_path
                     import pytesseract
-                    from PIL import Image
-                    import os
                     
                     # Convert PDF to images
                     images = convert_from_path(file_path)
@@ -538,14 +562,19 @@ async def _extract_text_from_file(file_path: str, file_type: str) -> str | None:
                     
                     if len(ocr_text.strip()) > len(text.strip()):
                         return ocr_text.strip()
+                except ImportError:
+                    logger.warning("OCR dependencies not installed. Install with: pip install pytesseract pdf2image")
                 except Exception as ocr_err:
-                    logger.error(f"OCR fallback failed for {file_path}: {ocr_err}")
-                    # If OCR fails, return whatever we got from pypdf
+                    logger.warning(f"OCR fallback failed: {ocr_err}")
             
             return text.strip()
             
         elif file_type == "docx":
-            import docx
+            try:
+                import docx
+            except ImportError:
+                logger.error("python-docx not installed. Install with: pip install python-docx")
+                return None
             doc = docx.Document(file_path)
             return "\n".join([para.text for para in doc.paragraphs]).strip()
             

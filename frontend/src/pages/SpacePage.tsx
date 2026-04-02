@@ -103,15 +103,15 @@ export default function SpacePage() {
   if (!user) {
     return (
       <div className="max-w-4xl mx-auto py-32 px-6 text-center">
-        <div className="w-20 h-20 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-gray-100">
-          <FolderOpen className="h-10 w-10 text-gray-200" />
+        <div className="w-20 h-20 bg-secondary rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-border">
+          <FolderOpen className="h-10 w-10 text-muted-foreground/30" />
         </div>
         <h3 className="text-xl font-bold text-foreground font-display mb-2">Sign in to see your space</h3>
         <p className="text-sm text-muted-foreground mb-8 max-w-xs mx-auto font-medium">
           Access your personal learning repository from anywhere.
         </p>
         <Link to="/">
-          <Button className="rounded-2xl font-bold text-sm h-12 px-8 shadow-lg shadow-black/10">Back Home</Button>
+          <Button className="rounded-2xl font-bold text-sm h-12 px-8 shadow-lg shadow-primary/10">Back Home</Button>
         </Link>
       </div>
     );
@@ -129,31 +129,31 @@ export default function SpacePage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-screen w-full overflow-hidden bg-white">
+    <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-screen w-full overflow-hidden bg-background">
       {/* Space Header */}
-      <div className="px-6 py-6 border-b border-gray-50 flex items-center justify-between sticky top-0 bg-white z-10">
+      <div className="px-6 py-6 border-b border-border flex items-center justify-between sticky top-0 bg-background z-10">
         <div>
-          <h2 className="text-2xl font-bold text-black font-display tracking-tight leading-none">{selectedSpace.name}</h2>
+          <h2 className="text-2xl font-bold text-foreground font-display tracking-tight leading-none">{selectedSpace.name}</h2>
           <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-gray-50 px-2 py-0.5 rounded-md">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-secondary px-2 py-0.5 rounded-md">
                 {spaceVideos.length} Videos
             </span>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-gray-50 px-2 py-0.5 rounded-md">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-secondary px-2 py-0.5 rounded-md">
                 {documents.length} Docs
             </span>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-gray-50 px-2 py-0.5 rounded-md">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-secondary px-2 py-0.5 rounded-md">
                 {notes.length} Notes
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex bg-gray-100/50 p-1.5 rounded-2xl border border-gray-200/50">
+          <div className="flex bg-secondary p-1.5 rounded-2xl border border-border">
             <button
                onClick={() => setActiveTab("materials")}
                className={cn(
                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                 activeTab === "materials" ? "bg-white text-black shadow-lg shadow-black/5" : "text-muted-foreground hover:text-black"
+                 activeTab === "materials" ? "bg-background text-foreground shadow-lg shadow-foreground/5" : "text-muted-foreground hover:text-foreground"
                )}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
@@ -163,15 +163,15 @@ export default function SpacePage() {
                onClick={() => setActiveTab("chat")}
                className={cn(
                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                 activeTab === "chat" ? "bg-white text-black shadow-lg shadow-black/5" : "text-muted-foreground hover:text-black"
+                 activeTab === "chat" ? "bg-background text-foreground shadow-lg shadow-foreground/5" : "text-muted-foreground hover:text-foreground"
                )}
             >
               <MessageSquare className="h-3.5 w-3.5" />
               Space Chat
             </button>
           </div>
-          <Button variant="ghost" size="icon" className="rounded-2xl hover:bg-gray-50">
-            <Settings className="h-5 w-5 text-gray-400" />
+          <Button variant="ghost" size="icon" className="rounded-2xl hover:bg-secondary">
+            <Settings className="h-5 w-5 text-muted-foreground" />
           </Button>
         </div>
       </div>
@@ -232,7 +232,7 @@ export default function SpacePage() {
                 placeholder="What's this note about?" 
                 value={newNote.title}
                 onChange={(e) => setNewNote(prev => ({ ...prev, title: e.target.value }))}
-                className="rounded-2xl border-gray-100 bg-gray-50/50 focus:bg-white transition-all h-12"
+                className="rounded-2xl border-border bg-secondary/50 focus:bg-background transition-all h-12"
               />
             </div>
             <div className="space-y-1.5">
@@ -241,10 +241,10 @@ export default function SpacePage() {
                 placeholder="Write your thoughts here..." 
                 value={newNote.content}
                 onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
-                className="rounded-3xl border-gray-100 bg-gray-50/50 focus:bg-white transition-all min-h-[200px] resize-none"
+                className="rounded-3xl border-border bg-secondary/50 focus:bg-background transition-all min-h-[200px] resize-none"
               />
             </div>
-            <Button onClick={handleCreateNoteSubmit} className="w-full h-12 rounded-2xl font-bold mt-4 shadow-lg shadow-black/10">
+            <Button onClick={handleCreateNoteSubmit} className="w-full h-12 rounded-2xl font-bold mt-4 shadow-lg shadow-primary/10">
               Create Note
             </Button>
           </div>
@@ -264,7 +264,7 @@ export default function SpacePage() {
                 <Input 
                   value={editingNote.title}
                   onChange={(e) => setEditingNote(prev => prev ? ({ ...prev, title: e.target.value }) : null)}
-                  className="rounded-2xl border-gray-100 bg-gray-50/50 focus:bg-white transition-all h-12"
+                  className="rounded-2xl border-border bg-secondary/50 focus:bg-background transition-all h-12"
                 />
               </div>
               <div className="space-y-1.5">
@@ -272,10 +272,10 @@ export default function SpacePage() {
                 <Textarea 
                   value={editingNote.content}
                   onChange={(e) => setEditingNote(prev => prev ? ({ ...prev, content: e.target.value }) : null)}
-                  className="rounded-3xl border-gray-100 bg-gray-50/50 focus:bg-white transition-all min-h-[200px] resize-none"
+                  className="rounded-3xl border-border bg-secondary/50 focus:bg-background transition-all min-h-[200px] resize-none"
                 />
               </div>
-              <Button onClick={handleUpdateNoteSubmit} className="w-full h-12 rounded-2xl font-bold mt-4 shadow-lg shadow-black/10">
+              <Button onClick={handleUpdateNoteSubmit} className="w-full h-12 rounded-2xl font-bold mt-4 shadow-lg shadow-primary/10">
                 Update Note
               </Button>
             </div>
@@ -291,12 +291,12 @@ export default function SpacePage() {
           </DialogHeader>
           
           <div className="relative mt-4">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Search your history..." 
               value={videoSearchQuery}
               onChange={(e) => setVideoSearchQuery(e.target.value)}
-              className="rounded-2xl border-gray-100 bg-gray-50/50 pl-11 h-12 focus:bg-white transition-all"
+              className="rounded-2xl border-border bg-secondary/50 pl-11 h-12 focus:bg-background transition-all"
             />
           </div>
 
@@ -310,7 +310,7 @@ export default function SpacePage() {
               .map((item) => (
                 <div 
                   key={item.id}
-                  className="flex items-center justify-between p-4 rounded-2xl border border-gray-50 hover:border-black/5 hover:bg-gray-50/50 transition-all group"
+                  className="flex items-center justify-between p-4 rounded-2xl border border-border hover:border-primary/20 hover:bg-secondary/50 transition-all group"
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     {item.metadata?.thumbnails?.[0] && (
@@ -321,7 +321,7 @@ export default function SpacePage() {
                         />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-black truncate">{item.title}</p>
+                      <p className="text-sm font-bold text-foreground truncate">{item.title}</p>
                       <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
                         {item.videoData?.channel} • {item.videoData?.duration}
                       </p>
