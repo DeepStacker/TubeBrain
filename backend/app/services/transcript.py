@@ -119,7 +119,7 @@ class TranscriptEngine:
                     return None
         return cls._whisper_model
 
-    MIN_WORD_COUNT = 50  # Quality gate: reject transcripts shorter than this
+    MIN_WORD_COUNT = 20  # Quality gate: reject transcripts shorter than this (was 50)
 
     async def extract(
         self,
@@ -155,8 +155,11 @@ class TranscriptEngine:
                 res = await self._try_transcript_api(video_id)
                 if res and res.word_count >= 1:
                     res.source = "youtube_transcript_api"
+                    logger.info(f"[{video_id}] Stage 1 SUCCESS: YouTube API ({res.word_count} words)")
                     return res
-            except: pass
+                logger.debug(f"[{video_id}] Stage 1: YouTube API returned <1 words")
+            except Exception as e:
+                logger.debug(f"[{video_id}] Stage 1 FAILED: {str(e)[:100]}")
             return None
 
         # Stage 2-3: yt-dlp captions (manual and auto, <3s each)
@@ -165,8 +168,11 @@ class TranscriptEngine:
                 res = await self._try_ytdlp_captions(url, auto=False)
                 if res and res.word_count >= self.MIN_WORD_COUNT:
                     res.source = "manual_captions"
+                    logger.info(f"[{video_id}] Stage 2 SUCCESS: yt-dlp manual captions ({res.word_count} words)")
                     return res
-            except: pass
+                logger.debug(f"[{video_id}] Stage 2: Manual captions <{self.MIN_WORD_COUNT} words")
+            except Exception as e:
+                logger.debug(f"[{video_id}] Stage 2 FAILED: {str(e)[:100]}")
             return None
 
         async def wrap_stage3():
@@ -174,8 +180,11 @@ class TranscriptEngine:
                 res = await self._try_ytdlp_captions(url, auto=True)
                 if res and res.word_count >= self.MIN_WORD_COUNT:
                     res.source = "auto_captions"
+                    logger.info(f"[{video_id}] Stage 3 SUCCESS: yt-dlp auto captions ({res.word_count} words)")
                     return res
-            except: pass
+                logger.debug(f"[{video_id}] Stage 3: Auto captions <{self.MIN_WORD_COUNT} words")
+            except Exception as e:
+                logger.debug(f"[{video_id}] Stage 3 FAILED: {str(e)[:100]}")
             return None
 
         # Stage 4-5: Cloud transcription (Groq, Gemini - <8s each)
@@ -183,16 +192,22 @@ class TranscriptEngine:
             try:
                 res = await self._try_groq_whisper(url, video_id, report=None)
                 if res and res.word_count >= self.MIN_WORD_COUNT:
+                    logger.info(f"[{video_id}] Stage 4 SUCCESS: Groq Whisper ({res.word_count} words)")
                     return res
-            except: pass
+                logger.debug(f"[{video_id}] Stage 4: Groq <{self.MIN_WORD_COUNT} words")
+            except Exception as e:
+                logger.debug(f"[{video_id}] Stage 4 FAILED: {str(e)[:100]}")
             return None
 
         async def wrap_stage5():
             try:
                 res = await self._try_gemini_whisper(url, video_id, report=None)
                 if res and res.word_count >= self.MIN_WORD_COUNT:
+                    logger.info(f"[{video_id}] Stage 5 SUCCESS: Gemini Whisper ({res.word_count} words)")
                     return res
-            except: pass
+                logger.debug(f"[{video_id}] Stage 5: Gemini <{self.MIN_WORD_COUNT} words")
+            except Exception as e:
+                logger.debug(f"[{video_id}] Stage 5 FAILED: {str(e)[:100]}")
             return None
 
         # Stage 6: Browser-Mimic as co-parallel fallback (<10s)
@@ -201,8 +216,11 @@ class TranscriptEngine:
                 result = await self._try_browser_transcript(video_id)
                 if result and result.word_count >= self.MIN_WORD_COUNT:
                     result.source = "browser_mimic"
+                    logger.info(f"[{video_id}] Stage 6 SUCCESS: Browser extraction ({result.word_count} words)")
                     return result
-            except: pass
+                logger.debug(f"[{video_id}] Stage 6: Browser <{self.MIN_WORD_COUNT} words")
+            except Exception as e:
+                logger.debug(f"[{video_id}] Stage 6 FAILED: {str(e)[:100]}")
             return None
 
         # ULTRA-FAST PARALLEL RACE: All stages run concurrently with 15s total timeout
@@ -224,18 +242,39 @@ class TranscriptEngine:
                     res = await coro
                     if res and not self._is_repetitive(res.segments):
                         winner = res
+                        logger.info(f"[{video_id}] Extraction race WON by: {res.source}")
                         # Immediately cancel all other tasks on first win
                         for t in tasks:
                             if not t.done():
                                 t.cancel()
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"[{video_id}] Task exception: {str(e)[:100]}")
                     continue
         except asyncio.TimeoutError:
             logger.warning(f"[{video_id}] Ultra-fast extraction race timed out at 15s")
 
         if winner:
             return await process_result(winner)
+
+        # INTERMEDIATE FALLBACK: Give browser extraction more time
+        # Browser can extract transcripts even without official captions
+        logger.warning(f"[{video_id}] Main race failed, giving browser extraction more time...")
+
+        try:
+            browser_result = await asyncio.wait_for(
+                self._try_browser_transcript(video_id),
+                timeout=10.0  # Give it 10 seconds
+            )
+            if browser_result and browser_result.segments and len(browser_result.segments) > 0:
+                logger.info(f"[{video_id}] Browser secondary extraction SUCCESS ({browser_result.word_count} words)")
+                browser_result.source = "browser_mimic_secondary"
+                return await process_result(browser_result)
+            logger.debug(f"[{video_id}] Browser secondary extraction returned empty")
+        except asyncio.TimeoutError:
+            logger.debug(f"[{video_id}] Browser secondary extraction timed out")
+        except Exception as e:
+            logger.debug(f"[{video_id}] Browser secondary extraction failed: {str(e)[:100]}")
 
         # FINAL FALLBACK: Metadata-only resilience mode
         # This ensures we always return something, even if transcription fails
@@ -494,6 +533,7 @@ class TranscriptEngine:
             from app.config import get_settings
             settings = get_settings()
             if not settings.GROQ_API_KEY:
+                logger.debug(f"[{video_id}] Stage 4: Groq API key not configured")
                 return None
 
             if report: await report(4, 6, "Groq: Attempting audio extraction...")
