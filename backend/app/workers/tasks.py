@@ -153,6 +153,9 @@ async def process_video_analysis(
                     # PARALLEL METADATA + TRANSCRIPT EXTRACTION
                     # Both happen concurrently to maximize speed
                     import asyncio
+                    metadata = {}
+                    transcript_result = None
+
                     try:
                         metadata, transcript_result = await asyncio.gather(
                             extract_metadata(platform_id),
@@ -165,19 +168,62 @@ async def process_video_analysis(
                             logger.debug(f"Metadata extraction failed: {metadata}")
                             metadata = {}
                         if isinstance(transcript_result, Exception):
-                            logger.error(f"Transcript extraction failed: {transcript_result}")
-                            return None, None
+                            logger.error(f"[{platform_id}] Transcript extraction error: {type(transcript_result).__name__}: {transcript_result}")
+                            transcript_result = None
 
-                        # Update video with metadata
-                        video.title = metadata.get("title", video.title)
-                        video.channel = metadata.get("channel", video.channel)
-                        video.duration_seconds = metadata.get("duration_seconds", video.duration_seconds)
-                        video.thumbnail_url = metadata.get("thumbnail_url", video.thumbnail_url)
-                        video.description = metadata.get("description", video.description)
-                        await vid_db.commit()
+                        # Update video with metadata (always safe to do)
+                        if metadata:
+                            video.title = metadata.get("title", video.title)
+                            video.channel = metadata.get("channel", video.channel)
+                            video.duration_seconds = metadata.get("duration_seconds", video.duration_seconds)
+                            video.thumbnail_url = metadata.get("thumbnail_url", video.thumbnail_url)
+                            video.description = metadata.get("description", video.description)
+                            await vid_db.commit()
+                            logger.info(f"[{platform_id}] Metadata stored: {video.title}")
+
                     except Exception as e:
-                        logger.error(f"Parallel extraction failed: {e}")
-                        return None, None
+                        logger.error(f"[{platform_id}] Parallel extraction outer error: {e}", exc_info=True)
+                        # Don't return None - continue with what we have (metadata might be partial)
+
+                    # Store transcript (fallback to metadata if extraction failed)
+                    if not transcript_result:
+                        logger.warning(f"[{platform_id}] Transcript extraction failed, creating metadata fallback transcript")
+                        # Create fallback transcript from metadata
+                        if metadata:
+                            fallback_text = f"VIDEO: {metadata.get('title', 'Unknown')}\n\n"
+                            fallback_text += f"DESCRIPTION:\n{metadata.get('description', 'No description available')}"
+
+                            # Create pseudo-segments from chapters
+                            segments = []
+                            for ch in metadata.get('chapters', []):
+                                try:
+                                    time_str = ch.get('time', '0:00')
+                                    parts = time_str.split(':')
+                                    start = 0
+                                    if len(parts) == 3: start = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])
+                                    elif len(parts) == 2: start = int(parts[0])*60 + int(parts[1])
+
+                                    segments.append({
+                                        "start": float(start),
+                                        "end": float(start + 60),
+                                        "text": f"Chapter: {ch.get('label', 'Chapter')}"
+                                    })
+                                except:
+                                    pass
+
+                            # Create fallback TranscriptResult
+                            from app.services.transcript import TranscriptResult, TranscriptSegment
+                            transcript_result = TranscriptResult(
+                                full_text=fallback_text,
+                                segments=[TranscriptSegment(**seg) for seg in segments] if segments else [TranscriptSegment(start=0, end=60, text="Metadata Analysis")],
+                                language="en",
+                                source="metadata_fallback",
+                                word_count=len(fallback_text.split())
+                            )
+                            logger.info(f"[{platform_id}] Created fallback transcript with {len(segments)} chapters")
+                        else:
+                            logger.error(f"[{platform_id}] No metadata available for fallback")
+                            return None, metadata
 
                     # Store transcript
                     transcript_result_obj = await vid_db.execute(
@@ -231,15 +277,10 @@ async def process_video_analysis(
             all_transcripts = [r[0] for r in results_phase1 if r and r[0] and not isinstance(r, Exception)]
             all_metadata = [r[1] for r in results_phase1 if r and r[1] and not isinstance(r, Exception)]
 
-            if not all_transcripts:
-                analysis.status = "completed"
-                analysis.progress_percentage = 50
-                await db.commit()
-                logger.warning(f"Analysis {analysis_id}: No transcripts extracted")
-                return
-
+            # CRITICAL: Always mark Phase 1 as complete at 50%, even if some extraction failed
+            # This ensures user sees whatever we extracted (chapters from metadata)
             phase1_elapsed = time.time() - start_time
-            logger.info(f"Analysis {analysis_id}: PHASE 1 complete in {phase1_elapsed:.1f}s ✓")
+            logger.info(f"Analysis {analysis_id}: PHASE 1 complete in {phase1_elapsed:.1f}s (transcripts: {len(all_transcripts)}, metadata: {len(all_metadata)})")
 
             # MARK ANALYSIS AS TRANSCRIPT-READY (50% complete) + STORE CHAPTERS
             analysis.status = "completed"  # Mark as ready even if AI synthesis pending
@@ -253,13 +294,16 @@ async def process_video_analysis(
                 if primary_metadata.get("chapters"):
                     analysis.timestamps = primary_metadata.get("chapters")
 
-            await db.commit()
-
-            # User gets transcript immediately at this point!
+            await db.commit()  # SAVE NOW - user gets results here regardless of Phase 2
 
             # PHASE 2: AI SYNTHESIS (Background, 30-60s)
             # This continues but doesn't block the user from seeing transcript
             logger.info(f"Analysis {analysis_id}: PHASE 2 - AI synthesis starting (async)...")
+
+            # Safety check: if still no transcripts, skip synthesis
+            if not all_transcripts:
+                logger.warning(f"Analysis {analysis_id}: No transcripts available even after fallbacks, skipping Phase 2")
+                return
 
             combined_transcript = "\n\n---\n\n".join(all_transcripts)
             word_count = len(combined_transcript.split())
