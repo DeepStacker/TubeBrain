@@ -313,7 +313,7 @@ async def process_video_analysis(
                     if all_metadata and len(all_metadata) > 0:
                         lang = all_metadata[0].get('language', 'en') or 'en'
 
-                    # Generate chapters with 5s timeout
+                    # Generate chapters with 10s timeout (increased from 5s for AI call)
                     chapter_gen_start = time.time()
                     chapters = await asyncio.wait_for(
                         generate_chapters_from_transcript(
@@ -323,12 +323,12 @@ async def process_video_analysis(
                             model=analysis.ai_model,
                             duration_seconds=0,
                         ),
-                        timeout=5.0
+                        timeout=10.0
                     )
                     chapter_gen_elapsed = time.time() - chapter_gen_start
                     logger.info(f"Analysis {analysis_id}: Generated {len(chapters)} chapters in {chapter_gen_elapsed:.1f}s")
                 except asyncio.TimeoutError:
-                    logger.warning(f"Analysis {analysis_id}: Chapter generation timed out (5s)")
+                    logger.warning(f"Analysis {analysis_id}: Chapter generation timed out (10s)")
                     chapters = [{"time": "0:00", "label": "Video Content"}]
                 except Exception as e:
                     logger.error(f"Analysis {analysis_id}: Chapter generation failed: {e}", exc_info=True)
@@ -347,6 +347,7 @@ async def process_video_analysis(
 
             # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
             # Phase 1 now completes at 100%, user immediately sees transcript + chapters + metadata
+            # Chapters are from metadata if available, or AI-generated from transcript (10s timeout)
             # User can then click "Generate Quiz", "Generate Overview", etc. to request AI tools
             # This ensures fast initial load without auto-waiting for AI synthesis
 
