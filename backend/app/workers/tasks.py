@@ -289,16 +289,21 @@ async def process_video_analysis(
 
             # GENERATE CHAPTERS FROM TRANSCRIPT (Phase 1 task)
             chapters = []
+            logger.info(f"Analysis {analysis_id}: Starting chapter generation. Transcripts: {len(all_transcripts)}, Metadata: {len(all_metadata)}")
 
             # Try to get chapters from metadata first
             if all_metadata and len(all_metadata) > 0:
                 primary_metadata = all_metadata[0]
+                logger.debug(f"Analysis {analysis_id}: Metadata keys: {list(primary_metadata.keys()) if primary_metadata else 'None'}")
                 if primary_metadata.get("chapters") and len(primary_metadata.get("chapters", [])) > 0:
                     chapters = primary_metadata.get("chapters")
                     logger.info(f"Analysis {analysis_id}: Using {len(chapters)} chapters from metadata")
+                else:
+                    logger.info(f"Analysis {analysis_id}: Metadata has no chapters or empty chapters. Chapters: {primary_metadata.get('chapters') if primary_metadata else 'No metadata'}")
 
             # If no metadata chapters, generate them from transcript using AI
             if not chapters and all_transcripts and len(all_transcripts) > 0:
+                logger.info(f"Analysis {analysis_id}: Generating chapters from transcript (length: {len(all_transcripts[0])} chars)")
                 try:
                     from app.services.ai_pipeline import generate_chapters_from_transcript
                     transcript_text = all_transcripts[0]
@@ -326,13 +331,17 @@ async def process_video_analysis(
                     logger.warning(f"Analysis {analysis_id}: Chapter generation timed out (5s)")
                     chapters = [{"time": "0:00", "label": "Video Content"}]
                 except Exception as e:
-                    logger.error(f"Analysis {analysis_id}: Chapter generation failed: {e}")
+                    logger.error(f"Analysis {analysis_id}: Chapter generation failed: {e}", exc_info=True)
                     chapters = [{"time": "0:00", "label": "Video Content"}]
+            else:
+                logger.info(f"Analysis {analysis_id}: Skipping chapter generation (chapters={chapters}, transcripts={len(all_transcripts) if all_transcripts else 0})")
 
             # Store chapters in analysis
             if chapters:
                 analysis.timestamps = chapters
                 logger.info(f"Analysis {analysis_id}: Stored {len(chapters)} chapters/timestamps")
+            else:
+                logger.warning(f"Analysis {analysis_id}: No chapters to store")
 
             await db.commit()  # SAVE NOW - user gets results here regardless of Phase 2
 
