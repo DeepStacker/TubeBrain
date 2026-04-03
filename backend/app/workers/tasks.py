@@ -282,76 +282,84 @@ async def process_video_analysis(
             phase1_elapsed = time.time() - start_time
             logger.info(f"Analysis {analysis_id}: PHASE 1 complete in {phase1_elapsed:.1f}s (transcripts: {len(all_transcripts)}, metadata: {len(all_metadata)})")
 
-            # MARK ANALYSIS AS COMPLETE (100% - all extraction done) + GENERATE + STORE CHAPTERS
+            # MARK ANALYSIS AS COMPLETE (100% - all extraction done)
             analysis.status = "completed"  # Mark as ready - all extraction finished
             analysis.progress_percentage = 100
             analysis.status_message = "Transcript and chapters ready. AI tools available on-demand."
 
-            # GENERATE CHAPTERS FROM TRANSCRIPT (Phase 1 task)
+            # FAST CHAPTER EXTRACTION (Phase 1 - don't block here)
             chapters = []
-            logger.info(f"Analysis {analysis_id}: Starting chapter generation. Transcripts: {len(all_transcripts)}, Metadata: {len(all_metadata)}")
+            logger.info(f"Analysis {analysis_id}: Starting chapter extraction. Transcripts: {len(all_transcripts)}, Metadata: {len(all_metadata)}")
 
-            # Try to get chapters from metadata first
+            # Try to get chapters from metadata first (instant)
             if all_metadata and len(all_metadata) > 0:
                 primary_metadata = all_metadata[0]
-                logger.debug(f"Analysis {analysis_id}: Metadata keys: {list(primary_metadata.keys()) if primary_metadata else 'None'}")
                 if primary_metadata.get("chapters") and len(primary_metadata.get("chapters", [])) > 0:
                     chapters = primary_metadata.get("chapters")
                     logger.info(f"Analysis {analysis_id}: Using {len(chapters)} chapters from metadata")
+                    analysis.timestamps = chapters
+                    await db.commit()  # Save immediately with metadata chapters
+                    logger.info(f"Analysis {analysis_id}: PHASE 1 complete - returned with {len(chapters)} metadata chapters")
+                    # Continue to background AI generation below
                 else:
-                    logger.info(f"Analysis {analysis_id}: Metadata has no chapters or empty chapters. Chapters: {primary_metadata.get('chapters') if primary_metadata else 'No metadata'}")
-
-            # If no metadata chapters, generate them from transcript using AI
-            if not chapters and all_transcripts and len(all_transcripts) > 0:
-                logger.info(f"Analysis {analysis_id}: Generating chapters from transcript (length: {len(all_transcripts[0])} chars)")
-                try:
-                    from app.services.ai_pipeline import generate_chapters_from_transcript
-                    transcript_text = all_transcripts[0]
-
-                    # Get language from metadata or use default
-                    lang = 'en'
-                    if all_metadata and len(all_metadata) > 0:
-                        lang = all_metadata[0].get('language', 'en') or 'en'
-
-                    # Generate chapters with 10s timeout (increased from 5s for AI call)
-                    chapter_gen_start = time.time()
-                    chapters = await asyncio.wait_for(
-                        generate_chapters_from_transcript(
-                            transcript_text,
-                            language=lang,
-                            provider=analysis.ai_provider,
-                            model=analysis.ai_model,
-                            duration_seconds=0,
-                        ),
-                        timeout=10.0
-                    )
-                    chapter_gen_elapsed = time.time() - chapter_gen_start
-                    logger.info(f"Analysis {analysis_id}: Generated {len(chapters)} chapters in {chapter_gen_elapsed:.1f}s")
-                except asyncio.TimeoutError:
-                    logger.warning(f"Analysis {analysis_id}: Chapter generation timed out (10s)")
+                    # No metadata chapters - use fast default
                     chapters = [{"time": "0:00", "label": "Video Content"}]
-                except Exception as e:
-                    logger.error(f"Analysis {analysis_id}: Chapter generation failed: {e}", exc_info=True)
-                    chapters = [{"time": "0:00", "label": "Video Content"}]
-            else:
-                logger.info(f"Analysis {analysis_id}: Skipping chapter generation (chapters={chapters}, transcripts={len(all_transcripts) if all_transcripts else 0})")
+                    analysis.timestamps = chapters
+                    await db.commit()  # Save immediately with default chapter
+                    logger.info(f"Analysis {analysis_id}: PHASE 1 complete - returned with default chapter, starting background AI generation")
 
-            # Store chapters in analysis
-            if chapters:
-                analysis.timestamps = chapters
-                logger.info(f"Analysis {analysis_id}: Stored {len(chapters)} chapters/timestamps")
-            else:
-                logger.warning(f"Analysis {analysis_id}: No chapters to store")
+            # BACKGROUND: Generate AI chapters AFTER Phase 1 (don't block user)
+            # This happens asynchronously and updates database when ready
+            should_generate_ai_chapters = (
+                not chapters or
+                (len(chapters) > 0 and chapters[0].get("label") == "Video Content")
+            )
 
-            await db.commit()  # SAVE NOW - user gets results here regardless of Phase 2
+            if should_generate_ai_chapters and all_transcripts and len(all_transcripts) > 0:
+                    try:
+                        from app.services.ai_pipeline import generate_chapters_from_transcript
+                        transcript_text = all_transcripts[0]
+                        lang = 'en'
+                        if all_metadata and len(all_metadata) > 0:
+                            lang = all_metadata[0].get('language', 'en') or 'en'
+
+                        logger.info(f"Analysis {analysis_id}: Starting background AI chapter generation")
+                        chapter_gen_start = time.time()
+                        ai_chapters = await asyncio.wait_for(
+                            generate_chapters_from_transcript(
+                                transcript_text,
+                                language=lang,
+                                provider=analysis.ai_provider,
+                                model=analysis.ai_model,
+                                duration_seconds=0,
+                            ),
+                            timeout=15.0  # More time in background task
+                        )
+                        chapter_gen_elapsed = time.time() - chapter_gen_start
+
+                        if ai_chapters and len(ai_chapters) > 1:  # Only use if better than default
+                            logger.info(f"Analysis {analysis_id}: AI generated {len(ai_chapters)} chapters in {chapter_gen_elapsed:.1f}s, updating database")
+                            # Update analysis with AI-generated chapters
+                            async with async_session_factory() as update_db:
+                                analysis_update = await update_db.scalar(select(Analysis).where(Analysis.id == analysis_id))
+                                if analysis_update:
+                                    analysis_update.timestamps = ai_chapters
+                                    await update_db.commit()
+                                    logger.info(f"Analysis {analysis_id}: Updated timestamps with {len(ai_chapters)} AI chapters")
+                        else:
+                            logger.warning(f"Analysis {analysis_id}: AI chapter generation produced no better result")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Analysis {analysis_id}: Background AI chapter generation timed out")
+                    except Exception as e:
+                        logger.error(f"Analysis {analysis_id}: Background AI chapter generation failed: {e}", exc_info=True)
 
             # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
-            # Phase 1 now completes at 100%, user immediately sees transcript + chapters + metadata
-            # Chapters are from metadata if available, or AI-generated from transcript (10s timeout)
+            # Phase 1 now completes at 100%, user immediately sees transcript + chapters (metadata or default)
+            # AI chapters generate in background and update database when ready
             # User can then click "Generate Quiz", "Generate Overview", etc. to request AI tools
-            # This ensures fast initial load without auto-waiting for AI synthesis
+            # This ensures fast initial load (8-15s) without blocking for chapter generation
 
-            logger.info(f"Analysis {analysis_id}: PHASE 1 complete - all extraction done, AI tools on-demand")
+            logger.info(f"Analysis {analysis_id}: PHASE 1 complete - extraction done, AI tools on-demand")
             return  # End here - Phase 2 happens on-demand via API calls
 
         except Exception as e:
