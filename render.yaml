@@ -110,8 +110,9 @@ services:
   # Deployed as static site - NO runtime memory needed!
   # Vite builds to static HTML/JS/CSS, served directly by Render CDN
   # This is FREE and doesn't count against service limits
-  - type: static
+  - type: web
     name: tubebrain
+    runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     pullRequestPreviewsEnabled: true
