@@ -422,11 +422,34 @@ class TranscriptEngine:
         """Check if transcript segments are overly repetitive (bot detection signature)."""
         if len(segments) < 5:
             return False
-            
-        recent_texts = [s.text.strip().lower() for s in segments[:10]]
-        for text in set(recent_texts):
-            if recent_texts.count(text) > 5:
-                return True
+
+        # Ignore common placeholder markers that appear frequently but aren't "real" content
+        placeholder_markers = {
+            '[music]', '[applause]', '[silence]', '[noise]', '[laughter]',
+            '[singing]', '[background noise]', '[traffic noise]', '[door opens]',
+            '[footsteps]', '[speaking]', '[inaudible]', '[crosstalk]', '[pause]'
+        }
+
+        # Check first 20 segments for real repetitive content
+        recent_texts = [
+            s.text.strip().lower()
+            for s in segments[:20]
+            if s.text.strip().lower() not in placeholder_markers
+        ]
+
+        # Only flag if REAL content repeats excessively in early segments
+        if not recent_texts:
+            return False  # All placeholders, not repetitive
+
+        from collections import Counter
+        counts = Counter(recent_texts)
+        most_common, count = counts.most_common(1)[0]
+
+        # Only reject if the same phrase appears >70% in early segments (hallucination pattern)
+        total = len(recent_texts)
+        if total > 5 and (count / total) > 0.7:
+            return True
+
         return False
 
     def _segments_to_timestamped_text(self, segments: List[TranscriptSegment]) -> str:
@@ -1377,31 +1400,46 @@ class TranscriptEngine:
         """Detect if the transcript is mostly repetitive boilerplate (hallucinations)."""
         if not segments:
             return False
-            
+
         from collections import Counter
-        # Normalize text for counting
-        normalized = [s.text.strip().lower() for s in segments if s.text.strip()]
+
+        # Ignore common placeholder markers
+        placeholder_markers = {
+            '[music]', '[applause]', '[silence]', '[noise]', '[laughter]',
+            '[singing]', '[background noise]', '[traffic noise]', '[door opens]',
+            '[footsteps]', '[speaking]', '[inaudible]', '[crosstalk]', '[pause]'
+        }
+
+        # Normalize text for counting, excluding placeholders
+        normalized = [
+            s.text.strip().lower()
+            for s in segments
+            if s.text.strip() and s.text.strip().lower() not in placeholder_markers
+        ]
+
         if not normalized:
-            return False
-            
+            return False  # All placeholders, not repetitive
+
         counts = Counter(normalized)
         if not counts:
             return False
-            
+
         most_common_text, count = counts.most_common(1)[0]
-        
-        # Thresholds:
-        # 1. If a single phrase takes up > 50% of a non-trivial transcript
-        # 2. If a single phrase repeats > 10 times in any transcript
         total = len(normalized)
-        if total > 5 and (count / total) > 0.5:
-            logger.warning(f"Repetitive transcript detected: '{most_common_text}' repeated {count}/{total} times")
+
+        # ONLY flag if a phrase dominates the transcript (hallucination signature)
+        # If >50% of content is a single repeated phrase = likely hallucination
+        # Natural repetition of common words is OK
+        if total > 10 and (count / total) > 0.5:
+            logger.warning(f"Repetitive transcript detected: '{most_common_text}' repeated {count}/{total} times ({(count/total)*100:.1f}%)")
             return True
-            
-        if count > 12: # Hard limit for any repetition
-            logger.warning(f"Highly repetitive phrase detected: '{most_common_text}' repeated {count} times")
+
+        # If total is very small AND repetitive, could be hallucination
+        # But only if the phrase is EXTREMELY repetitive (90%+)
+        if total <= 10 and (count / total) > 0.9:
+            logger.warning(f"Highly repetitive short transcript: '{most_common_text}' repeated {count}/{total} times")
             return True
-            
+
         return False
 
 
