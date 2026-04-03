@@ -1371,163 +1371,169 @@ class TranscriptError(Exception):
 
 
 async def extract_metadata(video_id: str) -> dict:
-    """Unstoppable Deep-Scrape Metadata Extraction engine."""
-    # Lane 1: yt-dlp with Identity Jitter (Primary)
+    """Ultra-fast metadata extraction with parallel racing."""
+
+    # Lane 1: yt-dlp (fast, <5s)
+    async def lane1():
+        try:
+            import random
+            client_name = random.choice(["web", "mweb", "safari", "ios", "android"])
+            cmd = [
+                "yt-dlp",
+                "--dump-json",
+                "--no-download",
+                "--no-warnings",
+                "--quiet",
+                "--cookies", "/app/cookies.txt",
+                "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "--extractor-args", f"youtube:player-client={client_name}",
+                f"https://www.youtube.com/watch?v={video_id}",
+            ]
+            try:
+                proc = await asyncio.wait_for(
+                    _run_subprocess(cmd, timeout=5),
+                    timeout=6.0
+                )
+                if proc.returncode == 0:
+                    data = json.loads(proc.stdout)
+                    if data.get("title") and data.get("title").lower() != "unknown":
+                        return _parse_ytdlp_metadata(data)
+            except:
+                pass
+        except Exception as e:
+            logger.debug(f"Metadata Lane 1 (yt-dlp) failed: {e}")
+        return None
+
+    # Lane 3: Fast HTTP scrape (parallel with Lane 1, <5s)
+    async def lane3():
+        try:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            cookies = {}
+            cookie_path = "/app/cookies.txt"
+            if os.path.exists(cookie_path):
+                with open(cookie_path, "r") as f:
+                    for line in f:
+                        if not line.startswith("#") and "\t" in line:
+                            parts = line.split("\t")
+                            if len(parts) >= 7:
+                                cookies[parts[5].strip()] = parts[6].strip()
+
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"}
+
+            try:
+                async with httpx.AsyncClient(timeout=5.0, follow_redirects=True, cookies=cookies) as client:
+                    resp = await asyncio.wait_for(
+                        client.get(url, headers=headers),
+                        timeout=6.0
+                    )
+                    if resp.status_code == 200:
+                        html_content = resp.text
+
+                        title = None
+                        desc = None
+                        duration = 0
+                        thumbnail_url = None
+
+                        # OG Tags
+                        title_match = re.search(r'<meta property="og:title" content="([^"]+)">', html_content)
+                        desc_match = re.search(r'<meta property="og:description" content="([^"]+)">', html_content)
+                        if title_match: title = title_match.group(1)
+                        if desc_match: desc = desc_match.group(1)
+
+                        # ytInitialPlayerResponse (fast parse)
+                        if not title or duration == 0:
+                            j_patterns = [
+                                r'ytInitialPlayerResponse\s*=\s*({.+?});',
+                                r'window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});'
+                            ]
+                            for jp in j_patterns:
+                                json_match = re.search(jp, html_content)
+                                if json_match:
+                                    try:
+                                        player_data = json.loads(json_match.group(1))
+                                        video_details = player_data.get("videoDetails", {})
+                                        title = video_details.get("title", title)
+                                        duration = int(video_details.get("lengthSeconds", duration))
+                                        thumbs = video_details.get("thumbnail", {}).get("thumbnails", [])
+                                        if thumbs:
+                                            thumbnail_url = thumbs[-1].get("url")
+                                        break
+                                    except:
+                                        pass
+
+                        # Fallback title extraction
+                        if not title:
+                            r_match = re.search(r'<title>([^<]+)</title>', html_content)
+                            if r_match:
+                                title = r_match.group(1).replace(" - YouTube", "")
+
+                        title = title or "YouTube Video"
+                        desc = desc or "Metadata analysis triggered (Description unavailable)."
+
+                        import html as html_lib
+                        title = html_lib.unescape(title)
+                        desc = html_lib.unescape(desc)
+
+                        # Fast chapter extraction
+                        chapters = []
+                        ts_pattern = r"((?:\d+:)?\d+:\d+)\s+[-–—: \t]*\s*(.*?)(?=\s+(?:\d+:)?\d+:\d+|$)"
+                        for ts_match in re.finditer(ts_pattern, desc):
+                            chapters.append({"time": ts_match.group(1), "label": ts_match.group(2).strip()})
+
+                        return {
+                            "title": title,
+                            "description": desc[:5000],
+                            "chapter": "YouTube Artist",
+                            "duration_seconds": duration or 60,
+                            "view_count": 0,
+                            "like_count": 0,
+                            "thumbnail_url": thumbnail_url or f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
+                            "published_at": None,
+                            "language": "en",
+                            "chapters": chapters
+                        }
+            except asyncio.TimeoutError:
+                pass
+        except Exception as e:
+            logger.debug(f"Metadata Lane 3 (HTTP) failed: {e}")
+
+        return None
+
+    # PARALLEL RACE: Both lanes at the same time with 10s total timeout
+    import asyncio
+    tasks = [
+        asyncio.create_task(lane1()),
+        asyncio.create_task(lane3()),
+    ]
+
+    winner = None
     try:
-        import random
-        client_name = random.choice(["web", "mweb", "safari", "ios", "android"])
-        cmd = [
-            "yt-dlp",
-            "--dump-json",
-            "--no-download",
-            "--no-warnings",
-            "--quiet",
-            "--cookies", "/app/cookies.txt",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "--extractor-args", f"youtube:player-client={client_name}",
-            f"https://www.youtube.com/watch?v={video_id}",
-        ]
-        proc = await _run_subprocess(cmd, timeout=20)
-        if proc.returncode == 0:
-            data = json.loads(proc.stdout)
-            if data.get("title") and data.get("title").lower() != "unknown":
-                return _parse_ytdlp_metadata(data)
-    except Exception as e:
-        logger.warning(f"Metadata Lane 1 (yt-dlp) failed for {video_id}: {e}")
+        for coro in asyncio.as_completed(tasks, timeout=10):
+            try:
+                res = await coro
+                if res and res.get("title") and res["title"] != "Unknown":
+                    winner = res
+                    # Cancel other tasks immediately
+                    for t in tasks:
+                        if not t.done():
+                            t.cancel()
+                    break
+            except:
+                continue
+    except asyncio.TimeoutError:
+        logger.debug(f"Metadata extraction race timed out")
 
-    # Lane 3: Hard-HTML Deep-Scrape (Final Resort / UNSTOPPABLE)
-    try:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        # Load Cookies for Authenticated Scrape
-        cookies = {}
-        cookie_path = "/app/cookies.txt"
-        if os.path.exists(cookie_path):
-            with open(cookie_path, "r") as f:
-                for line in f:
-                    if not line.startswith("#") and "\t" in line:
-                        parts = line.split("\t")
-                        if len(parts) >= 7:
-                            cookies[parts[5].strip()] = parts[6].strip()
-        
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"}
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, cookies=cookies) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                html_content = resp.text
-                
-                # Multi-Signature Extraction (UNSTOPPABLE)
-                title = None
-                desc = None
-                duration = 0
-                thumbnail_url = None
-                published_at = None
-                channel = None
-                
-                # 1. OG Tags
-                title_match = re.search(r'<meta property="og:title" content="([^"]+)">', html_content)
-                desc_match = re.search(r'<meta property="og:description" content="([^"]+)">', html_content)
-                if title_match: title = title_match.group(1)
-                if desc_match: desc = desc_match.group(1)
-                
-                # 2. Schema.org JSON-LD (Robust fallback)
-                if not title:
-                     json_ld = re.search(r'<script type="application/ld\+json">([\s\S]*?)</script>', html_content)
-                     if json_ld:
-                         try:
-                             ld_text = json_ld.group(1).strip()
-                             ld_data = json.loads(ld_text)
-                             
-                             # Handle list-based JSON-LD
-                             if isinstance(ld_data, list):
-                                 ld_data = ld_data[0] if ld_data else {}
-                             elif isinstance(ld_data, dict) and "@graph" in ld_data:
-                                 # Find VideoObject in graph
-                                 vg = [x for x in ld_data["@graph"] if x.get("@type") == "VideoObject"]
-                                 if vg: ld_data = vg[0]
+    if winner:
+        return winner
 
-                             title = ld_data.get("name", title)
-                             desc = ld_data.get("description", desc)
-                             thumbnail_url = ld_data.get("thumbnailUrl", thumbnail_url)
-                             if isinstance(thumbnail_url, list) and thumbnail_url:
-                                 thumbnail_url = thumbnail_url[0]
-                         except: pass
-                
-                # 3. Twitter Tags
-                if not title:
-                    t_match = re.search(r'<meta name="twitter:title" content="([^"]+)">', html_content)
-                    if t_match: title = t_match.group(1)
-                
-                # 4. ytInitialPlayerResponse JSON (THE HIGH-TRUST LANE)
-                if not title or duration == 0:
-                    # More robust regex for ytInitialPlayerResponse
-                    j_patterns = [
-                        r'ytInitialPlayerResponse\s*=\s*({.+?});',
-                        r'ytInitialPlayerResponse\s*=\s*({.+?})\s*</script>',
-                        r'window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});'
-                    ]
-                    for jp in j_patterns:
-                        json_match = re.search(jp, html_content)
-                        if json_match:
-                            try:
-                                player_data = json.loads(json_match.group(1))
-                                video_details = player_data.get("videoDetails", {})
-                                title = video_details.get("title", title)
-                                duration = int(video_details.get("lengthSeconds", duration))
-                                thumbnail_url = video_details.get("thumbnail", {}).get("thumbnails", [{"url": thumbnail_url}])[-1].get("url")
-                                logger.info(f"Metadata Lane 3 (JSON-Scrape) Success: {title} ({duration}s)")
-                                break
-                            except: pass
-
-                # 5. Schema.org / OpenGraph / Twitter Fallbacks
-                if not title:
-                    og_match = re.search(r'<meta property="og:title" content="([^"]+)">', html_content)
-                    if og_match: title = og_match.group(1)
-                if not title:
-                    item_match = re.search(r'<link itemprop="name" content="([^"]+)">', html_content)
-                    if item_match: title = item_match.group(1)
-                
-                # 6. Raw Title Tag Fallback
-                if not title:
-                    r_match = re.search(r'<title>([^<]+)</title>', html_content)
-                    if r_match: title = r_match.group(1).replace(" - YouTube", "")
-                
-                title = title or "YouTube Video"
-                desc = desc or "Metadata analysis triggered (Description unavailable)."
-                
-                # Unescape HTML entities
-                import html as html_lib
-                title = html_lib.unescape(title)
-                desc = html_lib.unescape(desc)
-
-                logger.info(f"Metadata Lane 3 (Total Spectrum) Status: {title}")
-                
-                # CHAPTER EXTRACTION: Parse description for timestamps
-                chapters = []
-                # Match 00:00, 1:23, 01:23:45 format
-                # Use non-greedy lookahead to stop before the next timestamp
-                ts_pattern = r"((?:\d+:)?\d+:\d+)\s+[-–—: \t]*\s*(.*?)(?=\s+(?:\d+:)?\d+:\d+|$)"
-                for ts_match in re.finditer(ts_pattern, desc):
-                    chapters.append({
-                        "time": ts_match.group(1),
-                        "label": ts_match.group(2).strip()
-                    })
-
-                return {
-                    "title": title,
-                    "description": desc[:10000],
-                    "channel": channel or "YouTube Artist",
-                    "duration_seconds": duration or 60,
-                    "view_count": 0,
-                    "like_count": 0,
-                    "thumbnail_url": thumbnail_url or f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
-                    "published_at": None,
-                    "language": "en",
-                    "chapters": chapters
-                }
-    except Exception as e:
-        logger.error(f"Metadata Lane 3 (Deep-Scrape) absolute failure for {video_id}: {e}")
-
-    return {"title": "Unknown", "channel": "Unknown", "chapters": []}
+    # Final minimal fallback
+    return {
+        "title": "YouTube Video",
+        "channel": "Unknown",
+        "description": "Metadata analysis mode (extraction unavailable).",
+        "duration_seconds": 60,
+        "chapters": []
+    }
 
 
 def _parse_ytdlp_metadata(data: dict) -> dict:
