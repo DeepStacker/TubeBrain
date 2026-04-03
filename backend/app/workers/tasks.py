@@ -387,7 +387,7 @@ async def process_video_analysis(
                     video.status = "ready"
                     await vid_db.commit()
 
-                    return transcript_result.full_text, metadata
+                    return transcript_result.full_text, metadata, video.duration_seconds or 0
 
             # Extract transcripts for all videos
             tasks_phase1 = [process_single_video_transcript_only(vid_id) for vid_id in video_ids]
@@ -395,6 +395,7 @@ async def process_video_analysis(
 
             all_transcripts = [r[0] for r in results_phase1 if r and r[0] and not isinstance(r, Exception)]
             all_metadata = [r[1] for r in results_phase1 if r and r[1] and not isinstance(r, Exception)]
+            all_durations = [r[2] for r in results_phase1 if r and len(r) > 2 and not isinstance(r, Exception)]
 
             # CRITICAL: Always mark Phase 1 as complete at 100%, even if some extraction failed
             # This ensures user sees whatever we extracted (chapters from metadata)
@@ -429,8 +430,8 @@ async def process_video_analysis(
             # Only if we used default chapters (no metadata chapters)
             if all_transcripts and len(all_transcripts) > 0 and chapters[0].get("label") == "Video Content":
                 duration_seconds = 0
-                if video and hasattr(video, 'duration_seconds'):
-                    duration_seconds = video.duration_seconds or 0
+                if all_durations and len(all_durations) > 0:
+                    duration_seconds = all_durations[0]
 
                 logger.info(f"Analysis {analysis_id}: Starting background chapter generation...")
 
