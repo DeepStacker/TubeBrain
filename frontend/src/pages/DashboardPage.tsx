@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useAnalysisContext } from "@/contexts/AnalysisContext";
 import { useSpacesContext } from "@/contexts/SpacesContext";
+import { useUIContext } from "@/contexts/UIContext";
 import { getRelativeDate } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -19,6 +20,7 @@ export default function DashboardPage() {
     setAnalysisStyle,
     handleLoadHistoryItem,
   } = useAnalysisContext();
+  const { setIsSearchModalOpen } = useUIContext();
   const { spaces, historyItems } = useSpacesContext();
 
   return (
@@ -41,6 +43,23 @@ export default function DashboardPage() {
             <p className="max-w-xl text-sm leading-7 text-muted-foreground md:text-base">
               Capture a source, review the synthesis, then move it into a space. The workflow stays visible, the interface stays quiet.
             </p>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setIsSearchModalOpen(true)}
+                className="h-10 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+              >
+                Search Library
+              </Button>
+              {historyItems.length > 0 && (
+                <Button
+                  onClick={() => handleLoadHistoryItem(historyItems[0])}
+                  className="h-10 rounded-full bg-foreground px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-background hover:bg-foreground/90"
+                >
+                  Continue Latest Session
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 text-left">

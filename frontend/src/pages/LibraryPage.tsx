@@ -1,20 +1,42 @@
 import { motion } from "framer-motion";
-import { Library as LibraryIcon, Trash2, ChevronRight } from "lucide-react";
+import { Library as LibraryIcon, Trash2, ChevronRight, Search, Sparkles, X, Layers } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { useSpacesContext } from "@/contexts/SpacesContext";
 import { useAnalysisContext } from "@/contexts/AnalysisContext";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getRelativeDate } from "@/lib/utils";
 
 export default function LibraryPage() {
   const { historyItems, spaces, handleDeleteHistoryItem } = useSpacesContext();
   const { handleLoadHistoryItem } = useAnalysisContext();
   const { user } = useAuthContext();
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const libraryItems = historyItems.filter(h => 
-    spaces.some(s => s.videoIds.includes(h.videoIds[0]))
-  );
+  const libraryItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return historyItems.filter((h) => {
+      const inSpace = spaces.some((s) => s.videoIds.includes(h.videoIds[0]));
+      if (!inSpace) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const spaceNames = spaces
+        .filter((s) => s.videoIds.includes(h.videoIds[0]))
+        .map((s) => s.name.toLowerCase())
+        .join(" ");
+      const channel = h.videoData?.channel?.toLowerCase() || "";
+      return h.title.toLowerCase().includes(query) || channel.includes(query) || spaceNames.includes(query);
+    });
+  }, [historyItems, searchQuery, spaces]);
+
+  const latestItem = libraryItems[0];
 
   if (!user) {
     return (
@@ -49,6 +71,43 @@ export default function LibraryPage() {
         <p className="text-sm font-medium text-muted-foreground/60 max-w-lg leading-relaxed">
           Your curated collection of videos, summaries, and learning tools organized across your custom spaces.
         </p>
+        <div className="flex flex-wrap items-center gap-3 pt-3">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter by title, channel, or space"
+              className="h-11 rounded-full border-border/70 bg-card pl-11 pr-10"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => latestItem && handleLoadHistoryItem(latestItem)}
+            disabled={!latestItem}
+            className="h-11 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Resume Latest
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => window.dispatchEvent(new CustomEvent("youtube-genius:open-shortcuts"))}
+            className="h-11 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+          >
+            <Layers className="mr-2 h-3.5 w-3.5" />
+            Library Tips
+          </Button>
+        </div>
       </div>
 
       {libraryItems.length > 0 ? (
@@ -92,11 +151,28 @@ export default function LibraryPage() {
           <div className="w-16 h-16 bg-secondary rounded-3xl flex items-center justify-center mx-auto mb-6 border border-border">
             <LibraryIcon className="h-7 w-7 text-muted-foreground/30" />
           </div>
-          <h3 className="text-lg font-bold text-foreground mb-1">Your library is empty</h3>
-          <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">Add videos to spaces to build your library.</p>
-          <Link to="/dashboard">
-            <Button className="rounded-xl font-semibold text-sm h-10 px-6 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10">Start Learning</Button>
-          </Link>
+          <h3 className="text-lg font-bold text-foreground mb-1">{searchQuery ? "No matching items" : "Your library is empty"}</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
+            {searchQuery
+              ? "Try a broader title, channel, or space name, or clear the filter to view everything saved here."
+              : "Add videos to spaces to build your library."}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {searchQuery ? (
+              <Button onClick={() => setSearchQuery("")} variant="outline" className="rounded-xl font-semibold text-sm h-10 px-6">Clear Filter</Button>
+            ) : (
+              <Link to="/dashboard">
+                <Button className="rounded-xl font-semibold text-sm h-10 px-6 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10">Start Learning</Button>
+              </Link>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() => window.dispatchEvent(new CustomEvent("youtube-genius:open-shortcuts"))}
+              className="rounded-xl font-semibold text-sm h-10 px-6 border border-border/70 bg-card"
+            >
+              Tips
+            </Button>
+          </div>
         </div>
       )}
     </motion.div>

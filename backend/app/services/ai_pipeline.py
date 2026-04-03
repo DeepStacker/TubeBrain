@@ -290,6 +290,32 @@ Return ONLY valid JSON with this structure:
   "tags": ["relevant", "tags"]
 }}"""
 
+# FULL SPECTRUM RESILIENCE: Used when transcripts are missing
+RESILIENCE_FULL_PROMPT = """You are an expert video analyst performing a 'Full-Spectrum Resilience Analysis'.
+Full transcription was unavailable, so you MUST deduce and reconstruct the video's narrative and entire learning suite based ONLY on the Title and Description.
+
+**CRITICAL: Deductive Narrative Reconstruction**
+You MUST identify and generate 10-15 logical chapter markers. Deduce these from the description's timestamps or topic shifts.
+Each label must be high-quality (min 5 words). First chapter at 0:00.
+
+Return ONLY valid JSON with this EXACT structure:
+{{
+  "overview": "3 dense paragraphs of deductive professional insights and narrative reconstruction",
+  "key_points": ["10-15 high-impact points"],
+  "takeaways": ["5-8 actionable takeaways"],
+  "timestamps": [
+    {{"time": "0:00", "label": "Mandatory Introduction and core premise (5+ words)"}},
+    {{"time": "M:SS", "label": "Descriptive label (5+ words)"}}
+  ],
+  "tags": ["relevant", "tags"],
+  "roadmap": {{"title": "Skill Mastery Roadmap", "steps": [{{"step": 1, "task": "...", "description": "..."}}]}},
+  "quiz": [{{"question": "...", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "..."}}],
+  "flashcards": [{{"front": "...", "back": "...", "hint": "..."}}],
+  "mind_map": {{"nodes": [{{"id": "1", "label": "..."}}], "edges": [{{"source": "1", "target": "2", "label": "..."}}]}},
+  "glossary": [{{"term": "...", "definition": "..."}}],
+  "learning_context": {{"why": "...", "whatToHowTo": "...", "bestWay": "..."}}
+}}"""
+
 
 MAP_SUMMARIZE_PROMPT = """You are an expert video analyst. Summarize the following segment of a transcript.
 Focus on:
@@ -398,7 +424,11 @@ async def synthesize_content(
     # Resilience Mode: Check if this is a metadata-only fallback
     is_metadata_only = "ANALYSIS SOURCE: VIDEO METADATA" in transcript_text
     if is_metadata_only:
-        system_prompt += "\n\nIMPORTANT: Full transcription was unavailable for this video. You are performing a 'Full-Spectrum Resilience Analysis' based ONLY on the video Title and Description. Still provide a full, structured analysis (Overview, Key Points, Quiz, Flashcards, etc.). \n\n**CRITICAL**: You must reconstruct a detailed 'Narrative Summary Transcript' as the first part of your response. Use the provided roadmap context to imagine how the content would flow and be as detailed as possible. DO NOT mention that the transcript is missing—just be an insightful AI analyst."
+        system_prompt = RESILIENCE_FULL_PROMPT.format(
+            language=language,
+            expertise=expertise,
+        )
+        system_prompt += "\n\nIMPORTANT: Use the provided roadmap context to imagine how the content would flow and be as detailed as possible. DO NOT mention that the transcript is missing—just be an insightful AI analyst."
 
     # Map-Reduce logic for long transcripts
     total_tokens = count_tokens(transcript_text)

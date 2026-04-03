@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, PlusCircle, GraduationCap } from "lucide-react";
+import { X, PlusCircle, GraduationCap, Search, Keyboard, Home } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
 import { BottomNav } from "@/components/BottomNav";
@@ -17,6 +18,8 @@ import FeedbackDialog from "../components/FeedbackDialog";
 import ProfileUpdateDialog from "../components/ProfileUpdateDialog";
 
 export function AppLayout() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { 
     isSidebarCollapsed, 
     setIsSidebarCollapsed, 
@@ -35,6 +38,11 @@ export function AppLayout() {
   const { user, credits, handleLogout } = useAuthContext();
   const { videoData, activeAnalysisId, handleBackToDashboard } = useAnalysisContext();
   const { spaces, handleCreateNewSpace } = useSpacesContext();
+  const isAnalysisRoute = location.pathname.startsWith("/analysis/");
+
+  const openShortcuts = () => {
+    window.dispatchEvent(new CustomEvent("youtube-genius:open-shortcuts"));
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background font-sans text-foreground relative">
@@ -88,6 +96,43 @@ export function AppLayout() {
               </div>
               
               <div className="flex items-center gap-3 shrink-0">
+                  {isAnalysisRoute && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        handleBackToDashboard();
+                        navigate("/dashboard");
+                      }}
+                      className="h-9 gap-2 rounded-full border border-border/70 bg-background px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+                    >
+                      <Home className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Dashboard</span>
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsSearchModalOpen(true)}
+                    className="h-9 gap-2 rounded-full border border-border/70 bg-background px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Search</span>
+                    <span className="hidden lg:inline text-[9px] text-muted-foreground/60">Cmd/Ctrl+K</span>
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={openShortcuts}
+                    className="h-9 gap-2 rounded-full border border-border/70 bg-background px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+                  >
+                    <Keyboard className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Shortcuts</span>
+                    <span className="hidden lg:inline text-[9px] text-muted-foreground/60">?</span>
+                  </Button>
+
                   <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground lg:flex">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/80" />
                     Ready

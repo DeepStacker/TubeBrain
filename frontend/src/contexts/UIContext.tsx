@@ -47,7 +47,10 @@ const UIContext = createContext<UIContextValue | null>(null);
 export function UIProvider({ children }: { children: ReactNode }) {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("tube-sidebar-collapsed") === "true";
+  });
+  
   const [isVideoMinimized, setIsVideoMinimized] = useState(false);
   const [isMobileLearnOpen, setIsMobileLearnOpen] = useState(false);
   
@@ -77,6 +80,11 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
+
+  // Persistence: Sidebar
+  useEffect(() => {
+    localStorage.setItem("tube-sidebar-collapsed", String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
 
   // Apply Theme & Accessibility Classes
   useEffect(() => {

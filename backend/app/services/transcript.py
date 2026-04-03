@@ -27,6 +27,7 @@ import re
 settings = get_settings()
 
 @dataclass
+@dataclass
 class TranscriptSegment:
     start: float
     end: float
@@ -121,102 +122,166 @@ class TranscriptEngine:
     MIN_WORD_COUNT = 50  # Quality gate: reject transcripts shorter than this
 
     async def extract(
-        self, 
-        video_id: str, 
+        self,
+        video_id: str,
         progress_callback: Optional[callable] = None
     ) -> TranscriptResult:
         """
-        Main entry: attempt stages in order until one succeeds.
-        
-        Args:
-            video_id: YouTube video ID
-            progress_callback: Optional async callback(stage: int, total: int, message: str)
+        Ultra-Fast (<15s) Concurrent Race Extraction.
+        ALL stages run in true parallel with aggressive fail-fast logic.
         """
         url = f"https://www.youtube.com/watch?v={video_id}"
-        
+
         async def report(stage: int, total: int, msg: str):
             if progress_callback:
-                try:
-                    await progress_callback(stage, total, msg)
-                except Exception:
-                    pass
+                try: await progress_callback(stage, total, msg)
+                except Exception: pass
 
         # Success path handler
         async def process_result(res: TranscriptResult) -> TranscriptResult:
             if not res or not res.segments:
                 return res
-            
-            # Sort by timestamp
             res.segments = sorted(res.segments, key=lambda x: x.start)
-            # Logically group into professional paragraphs (Premium Reader)
             res.segments = self._group_segments(res.segments)
-            # Update full text from grouped segments
             res.full_text = " ".join([s.text for s in res.segments])
             res.word_count = len(res.full_text.split())
             return res
 
-        # Stage 1: youtube-transcript-api (fastest, most reliable)
-        await report(1, 6, "Checking YouTube captions...")
-        logger.info(f"[{video_id}] Stage 1: youtube-transcript-api")
-        result = await self._try_transcript_api(video_id)
-        if result and result.word_count >= 1 and not self._is_repetitive(result.segments):
-            result.source = "youtube_transcript_api"
-            result = await process_result(result)
-            logger.info(f"[{video_id}] ✓ Stage 1 success ({result.word_count} words)")
-            return result
+        await report(1, 6, "Starting ultra-fast extraction race...")
 
-        # Stage 2: Manual captions via yt-dlp
-        await report(2, 6, "Checking manual subtitles...")
-        logger.info(f"[{video_id}] Stage 2: yt-dlp manual captions")
-        result = await self._try_ytdlp_captions(url, auto=False)
-        if result and result.word_count >= self.MIN_WORD_COUNT and not self._is_repetitive(result.segments):
-            result.source = "manual_captions"
-            result = await process_result(result)
-            logger.info(f"[{video_id}] ✓ Stage 2 success ({result.word_count} words)")
-            return result
+        # Stage 1: YouTube Transcript API (fastest, <1s typically)
+        async def wrap_stage1():
+            try:
+                res = await self._try_transcript_api(video_id)
+                if res and res.word_count >= 1:
+                    res.source = "youtube_transcript_api"
+                    return res
+            except: pass
+            return None
 
-        # Stage 3: Auto-generated captions via yt-dlp
-        await report(3, 6, "Checking auto-generated subtitles...")
-        logger.info(f"[{video_id}] Stage 3: yt-dlp auto captions")
-        result = await self._try_ytdlp_captions(url, auto=True)
-        if result and result.word_count >= self.MIN_WORD_COUNT and not self._is_repetitive(result.segments):
-            result.source = "auto_captions"
-            result = await process_result(result)
-            logger.info(f"[{video_id}] ✓ Stage 3 success ({result.word_count} words)")
-            return result
+        # Stage 2-3: yt-dlp captions (manual and auto, <3s each)
+        async def wrap_stage2():
+            try:
+                res = await self._try_ytdlp_captions(url, auto=False)
+                if res and res.word_count >= self.MIN_WORD_COUNT:
+                    res.source = "manual_captions"
+                    return res
+            except: pass
+            return None
 
-        # Stage 4: Groq Cloud Whisper (FASTEST)
-        logger.info(f"[{video_id}] Stage 4: Groq Cloud Whisper")
-        cloud_result = await self._try_groq_whisper(url, video_id, report=report)
-        if cloud_result and cloud_result.word_count >= self.MIN_WORD_COUNT:
-            cloud_result = await process_result(cloud_result)
-            logger.info(f"[{video_id}] ✓ Groq Whisper success ({cloud_result.word_count} words)")
-            return cloud_result
+        async def wrap_stage3():
+            try:
+                res = await self._try_ytdlp_captions(url, auto=True)
+                if res and res.word_count >= self.MIN_WORD_COUNT:
+                    res.source = "auto_captions"
+                    return res
+            except: pass
+            return None
 
-        # Stage 5: Gemini Native Audio fallback
-        logger.info(f"[{video_id}] Stage 5: Gemini Native Audio Analysis")
-        cloud_result = await self._try_gemini_whisper(url, video_id, report=report)
-        if cloud_result and cloud_result.word_count >= self.MIN_WORD_COUNT:
-            cloud_result = await process_result(cloud_result)
-            logger.info(f"[{video_id}] ✓ Gemini Audio success ({cloud_result.word_count} words)")
-            return cloud_result
+        # Stage 4-5: Cloud transcription (Groq, Gemini - <8s each)
+        async def wrap_stage4():
+            try:
+                res = await self._try_groq_whisper(url, video_id, report=None)
+                if res and res.word_count >= self.MIN_WORD_COUNT:
+                    return res
+            except: pass
+            return None
 
-        # Stage 6: Local Whisper (last resort, slow)
-        if self._check_whisper_available():
-            await report(6, 6, "Local transcription (this may take a while)...")
-            logger.info(f"[{video_id}] Stage 6: Local Whisper")
-            result = await self._try_whisper(url, video_id)
-            if result and result.word_count >= self.MIN_WORD_COUNT:
-                result.source = "local_whisper"
-                result = await process_result(result)
-                logger.info(f"[{video_id}] ✓ Stage 6 success ({result.word_count} words)")
-                await report(6, 6, "Success!")
-                return result
+        async def wrap_stage5():
+            try:
+                res = await self._try_gemini_whisper(url, video_id, report=None)
+                if res and res.word_count >= self.MIN_WORD_COUNT:
+                    return res
+            except: pass
+            return None
 
-        # All stages failed
-        await report(6, 6, "All stages failed.")
-        logger.error(f"[{video_id}] ✗ All transcript extraction stages failed")
-        raise TranscriptError(f"Could not extract transcript for video {video_id}.")
+        # Stage 6: Browser-Mimic as co-parallel fallback (<10s)
+        async def wrap_stage6():
+            try:
+                result = await self._try_browser_transcript(video_id)
+                if result and result.word_count >= self.MIN_WORD_COUNT:
+                    result.source = "browser_mimic"
+                    return result
+            except: pass
+            return None
+
+        # ULTRA-FAST PARALLEL RACE: All stages run concurrently with 15s total timeout
+        import asyncio
+        tasks = [
+            asyncio.create_task(wrap_stage1()),
+            asyncio.create_task(wrap_stage2()),
+            asyncio.create_task(wrap_stage3()),
+            asyncio.create_task(wrap_stage4()),
+            asyncio.create_task(wrap_stage5()),
+            asyncio.create_task(wrap_stage6()),
+        ]
+
+        # Win condition: First non-repetitive, non-empty result wins
+        winner = None
+        try:
+            for coro in asyncio.as_completed(tasks, timeout=15):
+                try:
+                    res = await coro
+                    if res and not self._is_repetitive(res.segments):
+                        winner = res
+                        # Immediately cancel all other tasks on first win
+                        for t in tasks:
+                            if not t.done():
+                                t.cancel()
+                        break
+                except Exception:
+                    continue
+        except asyncio.TimeoutError:
+            logger.warning(f"[{video_id}] Ultra-fast extraction race timed out at 15s")
+
+        if winner:
+            return await process_result(winner)
+
+        # FINAL FALLBACK: Metadata-only resilience mode
+        # This ensures we always return something, even if transcription fails
+        logger.warning(f"[{video_id}] All transcription methods exhausted, using metadata fallback")
+        await report(6, 6, "Using metadata analysis...")
+        try:
+            from app.services.transcript import extract_metadata
+            metadata = await extract_metadata(video_id)
+
+            # Construct pseudo-transcript from metadata
+            pseudo_text = f"ANALYSIS SOURCE: VIDEO METADATA (Transcription Unavailable)\n\n"
+            pseudo_text += f"TITLE: {metadata.get('title', 'Unknown')}\n\n"
+            pseudo_text += f"DESCRIPTION:\n{metadata.get('description', 'No description available.')}"
+
+            segments = []
+            meta_chapters = metadata.get('chapters', [])
+
+            if meta_chapters:
+                for i, ch in enumerate(meta_chapters):
+                    parts = ch['time'].split(':')
+                    curr_time = 0
+                    if len(parts) == 3: curr_time = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])
+                    elif len(parts) == 2: curr_time = int(parts[0])*60 + int(parts[1])
+
+                    if i > 0 and segments:
+                        segments[-1].end = float(curr_time)
+
+                    segments.append(TranscriptSegment(
+                        start=float(curr_time),
+                        end=float(curr_time + 60),
+                        text=f"Chapter: {ch['label']}"
+                    ))
+
+            if not segments:
+                segments = [TranscriptSegment(start=0, end=float(metadata.get('duration_seconds', 60)), text="Video Context (Metadata Analysis)")]
+
+            return TranscriptResult(
+                full_text=pseudo_text,
+                segments=segments,
+                language=metadata.get('language', 'en'),
+                source="metadata_fallback",
+                word_count=len(pseudo_text.split())
+            )
+        except Exception as e:
+            logger.error(f"[{video_id}] Even metadata fallback failed: {e}")
+            raise TranscriptError(f"Could not extract transcript or metadata for video {video_id}.")
 
     async def _try_cloud_transcription_parallel(self, url: str, video_id: str) -> Optional[TranscriptResult]:
         """Try Groq and Gemini cloud transcription in parallel, return first success."""
@@ -335,9 +400,9 @@ class TranscriptEngine:
         return "\n".join(lines)
 
     async def _parallel_download_race(self, url: str, audio_path: str, clients: List[str], report: Optional[callable] = None) -> Tuple[Optional[str], Optional[subprocess.CompletedProcess], Optional[str]]:
-        """Race multiple yt-dlp identities to bypass YouTube IP blocks."""
+        """Race multiple yt-dlp identities with aggressive 5-second timeouts."""
         import asyncio
-        semaphore = asyncio.Semaphore(2)  # Max 2 parallel probes
+        semaphore = asyncio.Semaphore(3)  # 3 concurrent probes
 
         async def _probe(client_id):
             async with semaphore:
@@ -349,13 +414,14 @@ class TranscriptEngine:
                         "--cookies", "/app/cookies.txt",
                         "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                         "--extractor-args", "youtube:player-client=mweb,web,safari",
-                        "-f", "bestaudio/best",
+                        "-f", "bestaudio[filesize<100M]/bestaudio/best",  # Prefer smaller files for speed
                         "-o", shard_path,
                         "--no-warnings",
                         "--quiet",
                         url
                     ]
-                    proc = await _run_subprocess(cmd, timeout=300)
+                    # Aggressive timeout: 5 seconds per probe
+                    proc = await _run_subprocess(cmd, timeout=5)
                     if proc.returncode == 0 and os.path.exists(shard_path):
                         return client_id, proc, shard_path
                     return None
@@ -366,134 +432,159 @@ class TranscriptEngine:
         for coro in asyncio.as_completed(tasks):
             res = await coro
             if res:
-                # Cancel other pending tasks
+                # Cancel pending tasks immediately
                 for t in tasks:
                     if not t.done():
                         t.cancel()
                 return res
-        
+
         return None, None, None
 
     async def _transcribe_single_file(self, shard_path: str, video_id: str, settings, report=None) -> Optional[TranscriptResult]:
-        """Transcribe a single file piece using Groq Cloud."""
+        """Transcribe a single file piece using Groq Cloud (fast timeout)."""
         try:
             from groq import Groq
             client = Groq(api_key=settings.GROQ_API_KEY)
-            with open(shard_path, "rb") as f:
-                transcription = await asyncio.to_thread(
-                    client.audio.transcriptions.create,
-                    file=(os.path.basename(shard_path), f.read()),
-                    model="whisper-large-v3-turbo",
-                    response_format="verbose_json",
-                )
-                
-                result_data = transcription.model_dump()
-                full_text = result_data.get("text", "")
-                segments_data = result_data.get("segments", [])
-                
-                segments = []
-                for s in segments_data:
-                    segments.append(TranscriptSegment(
-                        start=float(s.get("start", 0)),
-                        end=float(s.get("end", 0)),
-                        text=s.get("text", "").strip(),
-                    ))
-                
-                if not segments and full_text:
-                    segments = [TranscriptSegment(start=0, end=0, text=full_text)]
 
-                return TranscriptResult(
-                    full_text=full_text,
-                    segments=segments,
-                    language=result_data.get("language", "en"),
-                    word_count=len(full_text.split()),
-                )
+            def _do_transcribe():
+                with open(shard_path, "rb") as f:
+                    return client.audio.transcriptions.create(
+                        file=(os.path.basename(shard_path), f.read()),
+                        model="whisper-large-v3-turbo",
+                        response_format="verbose_json",
+                    )
+
+            # Aggressive timeout: 6 seconds for transcription
+            transcription = await asyncio.wait_for(
+                asyncio.to_thread(_do_transcribe),
+                timeout=6.0
+            )
+
+            result_data = transcription.model_dump()
+            full_text = result_data.get("text", "")
+            segments_data = result_data.get("segments", [])
+
+            segments = []
+            for s in segments_data:
+                segments.append(TranscriptSegment(
+                    start=float(s.get("start", 0)),
+                    end=float(s.get("end", 0)),
+                    text=s.get("text", "").strip(),
+                ))
+
+            if not segments and full_text:
+                segments = [TranscriptSegment(start=0, end=0, text=full_text)]
+
+            return TranscriptResult(
+                full_text=full_text,
+                segments=segments,
+                language=result_data.get("language", "en"),
+                word_count=len(full_text.split()),
+            )
+        except asyncio.TimeoutError:
+            logger.debug(f"Groq transcription timeout for {shard_path}")
+            return None
         except Exception as e:
-            logger.warning(f"Groq shard transcription failed: {e}")
+            logger.debug(f"Groq shard transcription failed: {e}")
             return None
 
     async def _try_groq_whisper(self, url: str, video_id: str, report: Optional[callable] = None) -> Optional[TranscriptResult]:
-        """Download audio and transcribe with Groq Whisper V3."""
+        """Download audio and transcribe with Groq Whisper V3 (ultra-fast path)."""
         try:
             from app.config import get_settings
             settings = get_settings()
             if not settings.GROQ_API_KEY:
-                logger.warning("GROQ_API_KEY not configured, skipping cloud transcription")
                 return None
 
-            if report: await report(4, 6, "Groq: Finding fastest bypass route...")
+            if report: await report(4, 6, "Groq: Attempting audio extraction...")
             with tempfile.TemporaryDirectory() as tmpdir:
                 audio_path = os.path.join(tmpdir, f"{video_id}.m4a")
 
-                # --- FAST-LANE EXTRACTION (Parallel Probing) ---
-                # Race TV and iOS first (most reliable bot-bypass)
-                success_client, proc, downloaded_file = await self._parallel_download_race(url, audio_path, ["tv", "ios"], report)
-                
-                # If both failed, try Android and Web sequentially as last resort
+                # FAST EXTRACTION: Use only fastest clients with very short timeout
+                # Try iOS + TV (most reliable), timeout after 5s total
+                try:
+                    success_client, proc, downloaded_file = await asyncio.wait_for(
+                        self._parallel_download_race(url, audio_path, ["ios", "tv"], report),
+                        timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug(f"[{video_id}] Groq download timeout, trying fallback...")
+                    success_client, proc, downloaded_file = None, None, None
+
+                # If fast clients failed, try android/mweb with 3s timeout
                 if not success_client:
-                    if report: await report(4, 6, "Groq: Primary routes blocked, trying fallback identities...")
-                    success_client, proc, downloaded_file = await self._parallel_download_race(url, audio_path, ["android", "mweb"], report)
+                    try:
+                        success_client, proc, downloaded_file = await asyncio.wait_for(
+                            self._parallel_download_race(url, audio_path, ["android"], report),
+                            timeout=3.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[{video_id}] All Groq download attempts timed out")
+                        return None
 
                 if not success_client or not proc or proc.returncode != 0:
-                    err_msg = (proc.stderr or "All routes throttled").split("\n")[0] if proc else "All probes failed"
-                    logger.warning(f"All yt-dlp attempts failed for Groq: {err_msg}")
-                    if report: await report(4, 6, "Groq: YouTube is temporarily throttling this video")
                     return None
-                
+
                 actual_audio = None
                 try:
                     import shutil
                     shutil.move(downloaded_file, audio_path)
                     actual_audio = audio_path
                 except Exception as e:
-                    logger.error(f"Failed to promote winning shard: {e}")
+                    logger.debug(f"File move failed: {e}")
                     actual_audio = downloaded_file
 
-                size_mb = os.path.getsize(actual_audio) / (1024 * 1024)
-                logger.info(f"DEBUG [{video_id}]: Downloaded audio size: {size_mb:.2f} MB")
-
-                # --- INTELLIGENT ROUTER ---
-                if size_mb < 24.5:
-                    logger.info(f"DEBUG [{video_id}]: Skipping compression (Turbo-Path active)")
-                    return await self._transcribe_single_file(actual_audio, video_id, settings, report)
-
-                logger.info(f"DEBUG [{video_id}]: File too large ({size_mb:.2f} MB), sharding for Scale...")
-                if report: await report(4, 6, "Groq: Sharding 10+ hour context...")
-                
-                shards = await self._shard_audio(actual_audio, tmpdir)
-                if not shards:
-                    return await self._transcribe_with_compression(actual_audio, video_id, settings, report)
-
-                if report: await report(4, 6, f"Groq: Transcribing {len(shards)} segments...")
-                
-                semaphore = asyncio.Semaphore(10)
-                async def sem_transcribe(shard_path):
-                    async with semaphore:
-                        return await self._transcribe_single_file(shard_path, video_id, settings)
-
-                tasks = [sem_transcribe(s) for s in shards]
-                results = await asyncio.gather(*tasks)
-                valid_results = [r for r in results if r]
-                if not valid_results:
+                if not os.path.exists(actual_audio):
                     return None
 
-                return self._combine_transcript_results(valid_results)
+                size_mb = os.path.getsize(actual_audio) / (1024 * 1024)
+                logger.info(f"DEBUG [{video_id}]: Audio downloaded: {size_mb:.2f} MB")
+
+                # FAST TRANSCRIPTION LOGIC
+                if size_mb < 20:
+                    # Direct transcription for small files
+                    return await self._transcribe_single_file(actual_audio, video_id, settings, report)
+                else:
+                    # For larger files: Try compression first (faster than sharding)
+                    logger.info(f"[{video_id}] Large file ({size_mb:.2f} MB), compressing...")
+                    compressed = await self._transcribe_with_compression(actual_audio, video_id, settings, report)
+                    if compressed and compressed.word_count >= self.MIN_WORD_COUNT:
+                        return compressed
+
+                    # If compression didn't work, try sharding
+                    logger.info(f"[{video_id}] Compression failed, trying sharding...")
+                    shards = await self._shard_audio(actual_audio, tmpdir)
+                    if shards and len(shards) > 1:
+                        semaphore = asyncio.Semaphore(5)
+                        async def sem_transcribe(shard_path):
+                            async with semaphore:
+                                return await self._transcribe_single_file(shard_path, video_id, settings)
+
+                        tasks = [sem_transcribe(s) for s in shards]
+                        results = await asyncio.gather(*tasks)
+                        valid_results = [r for r in results if r]
+                        if valid_results:
+                            return self._combine_transcript_results(valid_results)
+
+                    return None
+
         except Exception as e:
-            logger.warning(f"Groq Cloud transcription failed: {e}")
+            logger.debug(f"Groq Cloud transcription failed: {e}")
             return None
 
     async def _shard_audio(self, audio_path: str, tmpdir: str) -> list[str]:
-        """Split audio into 15-minute shards using ffmpeg segmenter."""
+        """Split audio into 15-minute shards using ffmpeg segmenter (fast)."""
         try:
             output_pattern = os.path.join(tmpdir, "shard_%03d.m4a")
             cmd = ["ffmpeg", "-i", audio_path, "-f", "segment", "-segment_time", "900", "-c", "copy", "-y", output_pattern]
-            proc = await _run_subprocess(cmd, timeout=300)
+            # Aggressive timeout: 3 seconds for sharding
+            proc = await _run_subprocess(cmd, timeout=3)
             if proc.returncode != 0:
                 return []
             shards = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir) if f.startswith("shard_") and f.endswith(".m4a")]
             return sorted(shards)
         except Exception as e:
-            logger.error(f"Audio sharding failed: {e}")
+            logger.debug(f"Audio sharding failed: {e}")
             return []
 
     def _combine_transcript_results(self, results: list[TranscriptResult]) -> TranscriptResult:
@@ -511,87 +602,237 @@ class TranscriptEngine:
         return TranscriptResult(full_text=full_text, segments=combined_segments, language=results[0].language if results else "en", word_count=len(full_text.split()))
 
     async def _transcribe_with_compression(self, audio_path: str, video_id: str, settings, report=None) -> Optional[TranscriptResult]:
-        """Fallback for large files: Compress heavily and try one-shot."""
+        """Fallback for large files: Compress aggressively for ultra-speed."""
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 comp_path = os.path.join(tmpdir, "comp.mp3")
-                cmd = ["ffmpeg", "-i", audio_path, "-ar", "16000", "-ac", "1", "-b:a", "32k", "-y", comp_path]
-                await _run_subprocess(cmd, timeout=300)
-                if os.path.exists(comp_path):
+                # Aggressive compression: 8kHz mono, 16kb/s - minimal for speech only
+                cmd = ["ffmpeg", "-i", audio_path, "-ar", "8000", "-ac", "1", "-b:a", "16k", "-y", comp_path]
+                # 2 second timeout for compression
+                proc = await _run_subprocess(cmd, timeout=2)
+                if proc.returncode == 0 and os.path.exists(comp_path):
                     return await self._transcribe_single_file(comp_path, video_id, settings, report)
             return None
-        except: return None
+        except:
+            return None
+
+    async def _try_browser_transcript(self, video_id: str) -> Optional[TranscriptResult]:
+        """Ultimate Fallback: Use Playwright to extract transcript module (fast timeout)."""
+        from playwright.async_api import async_playwright
+        url = f"https://www.youtube.com/watch?v={video_id}"
+
+        try:
+            async with async_playwright() as p:
+                logger.info(f"[{video_id}] Browser-Mimic: Launching Chromium...")
+
+                try:
+                    browser = await asyncio.wait_for(
+                        p.chromium.launch(headless=True),
+                        timeout=3.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug(f"[{video_id}] Browser launch timeout")
+                    return None
+
+                try:
+                    context = await browser.new_context(
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                        viewport={"width": 1280, "height": 720}
+                    )
+                    page = await context.new_page()
+
+                    # Navigate with 5s timeout
+                    await asyncio.wait_for(
+                        page.goto(url, wait_until="load", timeout=5000),
+                        timeout=6.0
+                    )
+
+                    # Try to click Show Transcript (fast attempt, skip most dialogs)
+                    try:
+                        transcript_btn = page.get_by_label("Show transcript").first
+                        if await transcript_btn.is_visible():
+                            await transcript_btn.click()
+                            await asyncio.wait_for(
+                                page.wait_for_selector("ytd-transcript-segment-renderer", timeout=3000),
+                                timeout=4.0
+                            )
+                        else:
+                            await browser.close()
+                            return None
+                    except Exception as e:
+                        logger.debug(f"[{video_id}] Transcript button not found: {e}")
+                        await browser.close()
+                        return None
+
+                    # Extract segments with timeout
+                    segment_locators = page.locator("ytd-transcript-segment-renderer")
+                    count = await segment_locators.count()
+
+                    if count == 0:
+                        await browser.close()
+                        return None
+
+                    segments = []
+                    for i in range(min(count, 200)):  # Limit to first 200 segments for speed
+                        try:
+                            sel = segment_locators.nth(i)
+                            time_text = await sel.locator(".segment-timestamp").inner_text()
+                            text = await sel.locator(".segment-text").inner_text()
+
+                            parts = time_text.strip().split(":")
+                            if len(parts) == 2: s = int(parts[0])*60 + int(parts[1])
+                            elif len(parts) == 3: s = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])
+                            else: s = 0
+
+                            segments.append(TranscriptSegment(start=float(s), end=float(s+5), text=text.strip()))
+                        except: pass
+
+                    await browser.close()
+
+                    if segments:
+                        full_text = " ".join([s.text for s in segments])
+                        return TranscriptResult(
+                            full_text=full_text,
+                            segments=segments,
+                            language="en",
+                            source="browser_mimic",
+                            word_count=len(full_text.split())
+                        )
+                    return None
+                except asyncio.TimeoutError:
+                    await browser.close()
+                    return None
+                except Exception as e:
+                    try:
+                        await browser.close()
+                    except: pass
+                    logger.debug(f"[{video_id}] Browser extraction failed: {e}")
+                    return None
+
+        except Exception as e:
+            logger.debug(f"[{video_id}] Browser-Mimic Error: {e}")
+            return None
 
     async def _try_gemini_whisper(self, url: str, video_id: str, report: Optional[callable] = None) -> Optional[TranscriptResult]:
-        """Download audio and transcribe with Google AI Gemini 1.5 Flash."""
+        """Download audio and transcribe with Google AI Gemini 1.5 Flash (ultra-fast)."""
         try:
             from app.config import get_settings
             settings = get_settings()
             if not settings.GOOGLE_AI_KEY:
-                logger.warning("GOOGLE_AI_KEY not configured, skipping Gemini stage")
                 return None
 
-            if report: await report(5, 6, "Gemini: Finding fastest bypass route...")
+            if report: await report(5, 6, "Gemini: Extracting audio...")
             with tempfile.TemporaryDirectory() as tmpdir:
                 audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
 
-                # --- FAST-LANE EXTRACTION (Parallel Probing) ---
-                success_client, proc, downloaded_file = await self._parallel_download_race(url, audio_path, ["tv", "ios", "android"], report)
+                # FAST DOWNLOAD: 5 second timeout for audio extraction
+                try:
+                    success_client, proc, downloaded_file = await asyncio.wait_for(
+                        self._parallel_download_race(url, audio_path, ["ios", "tv", "android"], report),
+                        timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug(f"[{video_id}] Gemini download timeout")
+                    return None
 
                 if not success_client or not proc or proc.returncode != 0:
-                    err_msg = (proc.stderr or "All routes throttled").split("\n")[0] if proc else "All probes failed"
-                    logger.warning(f"All yt-dlp attempts failed for Gemini: {err_msg}")
-                    if report: await report(5, 6, "Gemini: Download failed (YouTube Throttling)")
                     return None
-                
+
                 actual_audio = downloaded_file
 
-                # Use Official Google SDK for reliable file upload and transcription
+                # Check file size
+                size_mb = os.path.getsize(actual_audio) / (1024 * 1024)
+                if size_mb > 25:
+                    # File too large for Gemini, try compression
+                    result = await self._transcribe_with_compression(actual_audio, video_id, settings, report)
+                    if result:
+                        return result
+                    return None
+
+                if report: await report(5, 6, "Gemini: Uploading and transcribing...")
+
+                # Use Official Google SDK for upload and transcription
                 import google.generativeai as genai
                 genai.configure(api_key=settings.GOOGLE_AI_KEY)
 
-                if report: await report(5, 6, "Gemini: Uploading audio...")
-                logger.info(f"DEBUG [{video_id}]: Uploading to Gemini Files API...")
-                
-                import asyncio
-                def _upload_file():
-                    return genai.upload_file(path=actual_audio, mime_type="audio/mpeg")
-                
                 try:
+                    def _upload_file():
+                        return genai.upload_file(path=actual_audio, mime_type="audio/mpeg")
+
                     uploaded_file = await asyncio.to_thread(_upload_file)
-                    logger.info(f"DEBUG [{video_id}]: Gemini Upload success: {uploaded_file.uri}")
                 except Exception as e:
-                    logger.info(f"DEBUG [{video_id}]: Gemini Upload failed: {e}")
+                    logger.debug(f"[{video_id}] Gemini upload failed: {e}")
                     return None
 
                 model = genai.GenerativeModel("gemini-1.5-flash")
                 prompt = "Transcribe this audio file. Return the transcription as a list of objects with 'start' (seconds as float), 'end' (seconds as float), and 'text' fields."
-                
+
                 def _generate():
-                    return model.generate_content([uploaded_file, prompt], generation_config=genai.GenerationConfig(response_mime_type="application/json", response_schema={"type": "object", "properties": {"transcription": {"type": "array", "items": {"type": "object", "properties": {"start": {"type": "number"}, "end": {"type": "number"}, "text": {"type": "string"}}, "required": ["start", "end", "text"]}}}, "required": ["transcription"]}))
+                    return model.generate_content(
+                        [uploaded_file, prompt],
+                        generation_config=genai.GenerationConfig(
+                            response_mime_type="application/json",
+                            response_schema={
+                                "type": "object",
+                                "properties": {
+                                    "transcription": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "start": {"type": "number"},
+                                                "end": {"type": "number"},
+                                                "text": {"type": "string"}
+                                            },
+                                            "required": ["start", "end", "text"]
+                                        }
+                                    }
+                                },
+                                "required": ["transcription"]
+                            }
+                        )
+                    )
 
                 try:
-                    if report: await report(5, 6, "Gemini: Transcribing...")
-                    response = await asyncio.to_thread(_generate)
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(_generate),
+                        timeout=8.0
+                    )
                     result_data = json.loads(response.text)
                     segments_data = result_data.get("transcription", [])
-                    segments = [TranscriptSegment(start=float(s.get("start", 0)), end=float(s.get("end", 0)), text=s.get("text", "").strip()) for s in segments_data]
+                    segments = [
+                        TranscriptSegment(
+                            start=float(s.get("start", 0)),
+                            end=float(s.get("end", 0)),
+                            text=s.get("text", "").strip()
+                        )
+                        for s in segments_data
+                    ]
                     full_text = self._segments_to_timestamped_text(segments)
-                    return TranscriptResult(full_text=full_text, segments=segments, language="en", word_count=len(full_text.split()))
+                    return TranscriptResult(
+                        full_text=full_text,
+                        segments=segments,
+                        language="en",
+                        word_count=len(full_text.split())
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug(f"[{video_id}] Gemini transcription timeout")
+                    return None
                 except Exception as e:
-                    logger.info(f"DEBUG [{video_id}]: Gemini GenerateContent/Parse failed: {e}")
+                    logger.debug(f"[{video_id}] Gemini generation failed: {e}")
                     return None
                 finally:
                     try:
                         def _delete_file(): genai.delete_file(uploaded_file.name)
                         await asyncio.to_thread(_delete_file)
                     except: pass
+
         except Exception as e:
-            logger.warning(f"Gemini Cloud transcription failed: {e}")
+            logger.debug(f"Gemini Cloud transcription failed: {e}")
             return None
 
     async def _try_ytdlp_captions(self, url: str, auto: bool = False) -> Optional[TranscriptResult]:
-        """Extract captions using yt-dlp subtitle download."""
+        """Extract captions using yt-dlp subtitle download (fast)."""
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 output_template = os.path.join(tmpdir, "subs")
@@ -599,8 +840,8 @@ class TranscriptEngine:
                 cmd = [
                     "yt-dlp",
                     "--skip-download",
-                    "--sub-lang", "en,en-US,en-GB,hi,hi-Latn,en-orig,.*",
-                    "--sub-format", "json3/srv3/vtt/srt/best",
+                    "--sub-lang", "en,en-US,en-GB,.*",
+                    "--sub-format", "json3/vtt/srt/best",
                     "-o", output_template,
                     "--no-warnings",
                     "--quiet",
@@ -613,7 +854,8 @@ class TranscriptEngine:
                 else:
                     cmd.insert(2, "--write-sub")
 
-                proc = await _run_subprocess(cmd, timeout=60)
+                # Aggressive timeout: 3 seconds for caption extraction
+                proc = await _run_subprocess(cmd, timeout=3)
 
                 if proc.returncode != 0:
                     return None
@@ -649,37 +891,45 @@ class TranscriptEngine:
                     word_count=word_count,
                 )
         except Exception as e:
-            logger.warning(f"yt-dlp caption extraction failed: {e}")
+            logger.debug(f"yt-dlp caption extraction failed: {e}")
             return None
 
     async def _try_whisper(self, url: str, video_id: str) -> Optional[TranscriptResult]:
-        """Download audio and transcribe with local Whisper. Skips if Whisper not installed."""
+        """Download audio and transcribe with local Whisper (fast timeout)."""
         if not self._check_whisper_available():
             logger.info(f"[{video_id}] Skipping local Whisper (not installed)")
             return None
-            
+
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
 
-                # Download audio only (lower quality for faster download)
+                # Download audio only (quality 9 = lowest, for speed)
                 cmd = [
                     "yt-dlp",
                     "-x",
                     "--audio-format", "mp3",
-                    "--audio-quality", "9",  # Lowest quality (sufficient for speech)
+                    "--audio-quality", "9",
                     "-o", audio_path,
                     "--no-warnings",
                     "--quiet",
                     url,
                 ]
 
-                proc = await _run_subprocess(cmd, timeout=300)
+                # Aggressive timeout: 3 seconds
+                try:
+                    proc = await asyncio.wait_for(
+                        _run_subprocess(cmd, timeout=3),
+                        timeout=4.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.debug(f"[{video_id}] Whisper audio download timeout")
+                    return None
 
                 if proc.returncode != 0:
                     return None
 
-                # Find the actual audio file (yt-dlp may add extension)
+                # Find the actual audio file
                 actual_audio = None
                 for f in os.listdir(tmpdir):
                     if f.endswith((".mp3", ".m4a", ".wav", ".opus", ".webm")):
@@ -693,7 +943,7 @@ class TranscriptEngine:
                 return await self._transcribe_with_whisper(actual_audio)
 
         except Exception as e:
-            logger.warning(f"Whisper transcription failed: {e}")
+            logger.debug(f"Whisper transcription failed: {e}")
             return None
 
     async def _transcribe_with_whisper(self, audio_path: str) -> Optional[TranscriptResult]:
@@ -1165,9 +1415,13 @@ async def extract_metadata(video_id: str) -> dict:
             if resp.status_code == 200:
                 html_content = resp.text
                 
-                # Multi-Signature Extraction
+                # Multi-Signature Extraction (UNSTOPPABLE)
                 title = None
                 desc = None
+                duration = 0
+                thumbnail_url = None
+                published_at = None
+                channel = None
                 
                 # 1. OG Tags
                 title_match = re.search(r'<meta property="og:title" content="([^"]+)">', html_content)
@@ -1180,9 +1434,22 @@ async def extract_metadata(video_id: str) -> dict:
                      json_ld = re.search(r'<script type="application/ld\+json">([\s\S]*?)</script>', html_content)
                      if json_ld:
                          try:
-                             ld_data = json.loads(json_ld.group(1).strip())
-                             title = ld_data.get("name")
-                             desc = ld_data.get("description")
+                             ld_text = json_ld.group(1).strip()
+                             ld_data = json.loads(ld_text)
+                             
+                             # Handle list-based JSON-LD
+                             if isinstance(ld_data, list):
+                                 ld_data = ld_data[0] if ld_data else {}
+                             elif isinstance(ld_data, dict) and "@graph" in ld_data:
+                                 # Find VideoObject in graph
+                                 vg = [x for x in ld_data["@graph"] if x.get("@type") == "VideoObject"]
+                                 if vg: ld_data = vg[0]
+
+                             title = ld_data.get("name", title)
+                             desc = ld_data.get("description", desc)
+                             thumbnail_url = ld_data.get("thumbnailUrl", thumbnail_url)
+                             if isinstance(thumbnail_url, list) and thumbnail_url:
+                                 thumbnail_url = thumbnail_url[0]
                          except: pass
                 
                 # 3. Twitter Tags
@@ -1237,7 +1504,8 @@ async def extract_metadata(video_id: str) -> dict:
                 # CHAPTER EXTRACTION: Parse description for timestamps
                 chapters = []
                 # Match 00:00, 1:23, 01:23:45 format
-                ts_pattern = r"((?:\d+:)?\d+:\d+)\s+[-–—: \t]*\s*(.+)"
+                # Use non-greedy lookahead to stop before the next timestamp
+                ts_pattern = r"((?:\d+:)?\d+:\d+)\s+[-–—: \t]*\s*(.*?)(?=\s+(?:\d+:)?\d+:\d+|$)"
                 for ts_match in re.finditer(ts_pattern, desc):
                     chapters.append({
                         "time": ts_match.group(1),
@@ -1246,8 +1514,8 @@ async def extract_metadata(video_id: str) -> dict:
 
                 return {
                     "title": title,
-                    "description": desc[:5000],
-                    "channel": "YouTube Artist",
+                    "description": desc[:10000],
+                    "channel": channel or "YouTube Artist",
                     "duration_seconds": duration or 60,
                     "view_count": 0,
                     "like_count": 0,
@@ -1456,11 +1724,7 @@ async def _run_subprocess(cmd: list[str], timeout: int = 60) -> subprocess.Compl
         return extract_metadata(*args, **kwargs)
 
 # Global aliases for legacy support
-async def extract_metadata(platform_id: str) -> dict:
-    """Consolidated logic for getting video details and chapters."""
-    from app.services.transcript import _fetch_video_info_internal
-    return await _fetch_video_info_internal(platform_id)
-
 async def get_video_info(platform_id: str) -> dict:
     """Legacy global alias for extract_metadata."""
+    # Always use the hardened Total Spectrum entry point
     return await extract_metadata(platform_id)

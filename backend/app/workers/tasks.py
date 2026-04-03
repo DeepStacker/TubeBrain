@@ -442,8 +442,8 @@ async def process_video_analysis(
             await db.commit()
             
             try:
-                # Use a tighter timeout for synthesis of standard videos
-                async with asyncio.timeout(90.0 if not is_ultra_scale else 300.0):
+                # Use a tighter timeout for synthesis: 30s for standard, 60s for ultra-scale
+                async with asyncio.timeout(30.0 if not is_ultra_scale else 60.0):
                     ai_result = await synthesize_content(
                     transcript_text=combined_transcript,
                     metadata=primary_metadata,
@@ -466,12 +466,16 @@ async def process_video_analysis(
             await db.commit()
 
             # Store result
-            analysis.overview = ai_result.get("overview")
-            analysis.key_points = ai_result.get("key_points")
-            analysis.takeaways = ai_result.get("takeaways")
-            analysis.timestamps = ai_result.get("timestamps")
-            analysis.learning_context = ai_result.get("learning_context")
-            analysis.tags = ai_result.get("tags")
+            mappingFields = [
+                "overview", "key_points", "takeaways", "timestamps", "tags",
+                "roadmap", "quiz", "mind_map", "flashcards", "glossary", 
+                "resources", "podcast", "learning_context"
+            ]
+            for field in mappingFields:
+                val = ai_result.get(field)
+                if val:
+                    setattr(analysis, field, val)
+
             analysis.status = "completed"
             analysis.progress_percentage = 100
             analysis.estimated_remaining_seconds = 0
@@ -575,9 +579,15 @@ async def process_upload(
             )
 
             # Store core analysis results
-            analysis.overview = ai_result.get("overview")
-            analysis.key_points = ai_result.get("key_points")
-            analysis.takeaways = ai_result.get("takeaways")
+            mappingFields = [
+                "overview", "key_points", "takeaways", "timestamps", "tags",
+                "roadmap", "quiz", "mind_map", "flashcards", "glossary", 
+                "resources", "podcast", "learning_context"
+            ]
+            for field in mappingFields:
+                val = ai_result.get(field)
+                if val:
+                    setattr(analysis, field, val)
             analysis.timestamps = ai_result.get("timestamps")
             analysis.learning_context = ai_result.get("learning_context")
             analysis.tags = ai_result.get("tags")

@@ -2,7 +2,8 @@ import { Search, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useUIContext } from "@/contexts/UIContext";
 import { useAnalysisContext } from "@/contexts/AnalysisContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 export default function SearchModal() {
   const {
@@ -16,12 +17,53 @@ export default function SearchModal() {
   } = useUIContext();
 
   const { handleLoadHistoryItem } = useAnalysisContext();
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const openResult = (index: number) => {
+    const result = searchResults[index];
+    if (!result) {
+      return;
+    }
+
+    if (result.type === "video" || result.type === "analysis" || result.type === "transcript") {
+      handleLoadHistoryItem({
+        id: result.video_id || result.id,
+        title: result.title,
+        videoIds: [result.platform_id || result.video_id || result.id],
+        date: new Date().toISOString(),
+        status: "completed",
+        videoData: {
+          title: result.title,
+          channel: "",
+          duration: "",
+          views: "",
+          likes: "",
+          published: ""
+        },
+        summaryData: {} as any,
+        transcript: "",
+        metadata: {
+          title: result.title,
+          channel: "",
+          duration: "",
+          thumbnails: [{ url: result.thumbnail || "", width: 120, height: 90 }]
+        }
+      });
+    }
+
+    setIsSearchModalOpen(false);
+    setSearchQuery("");
+  };
 
   useEffect(() => {
     if (isSearchModalOpen) {
       handleSearch(searchQuery);
     }
   }, [searchQuery, isSearchModalOpen, handleSearch]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchQuery, isSearchModalOpen, searchResults.length]);
 
   return (
     <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
@@ -33,6 +75,26 @@ export default function SearchModal() {
               autoFocus
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (!searchResults.length) {
+                  return;
+                }
+
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedIndex((prev) => (prev + 1) % searchResults.length);
+                }
+
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length);
+                }
+
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  openResult(selectedIndex);
+                }
+              }}
               placeholder="Search in Library"
               className="flex-1 bg-transparent text-base focus:outline-none placeholder:text-muted-foreground/30 text-foreground"
             />
@@ -64,39 +126,15 @@ export default function SearchModal() {
                   <div>
                      <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em] px-3 mb-3">Found in Library</h4>
                      <div className="space-y-1">
-                       {searchResults.map(result => (
+                       {searchResults.map((result, index) => (
                          <button 
                            key={result.id}
-                           onClick={() => {
-                             if (result.type === "video" || result.type === "analysis" || result.type === "transcript") {
-                               handleLoadHistoryItem({
-                                 id: result.video_id || result.id,
-                                 title: result.title,
-                                 videoIds: [result.platform_id || result.video_id || result.id],
-                                 date: new Date().toISOString(),
-                                 status: "completed",
-                                 videoData: {
-                                    title: result.title,
-                                    channel: "",
-                                    duration: "",
-                                    views: "",
-                                    likes: "",
-                                    published: ""
-                                 },
-                                 summaryData: {} as any,
-                                 transcript: "",
-                                 metadata: {
-                                    title: result.title,
-                                    channel: "",
-                                    duration: "",
-                                    thumbnails: [{ url: result.thumbnail || "", width: 120, height: 90 }]
-                                 }
-                               });
-                             }
-                             setIsSearchModalOpen(false);
-                             setSearchQuery("");
-                           }}
-                           className="w-full flex items-center gap-4 p-3 hover:bg-secondary/70 rounded-[18px] transition-all group text-left"
+                           onMouseEnter={() => setSelectedIndex(index)}
+                           onClick={() => openResult(index)}
+                           className={cn(
+                             "w-full flex items-center gap-4 p-3 rounded-[18px] transition-all group text-left",
+                             selectedIndex === index ? "bg-secondary" : "hover:bg-secondary/70"
+                           )}
                          >
                            <div className="w-16 h-10 bg-muted rounded-xl overflow-hidden shrink-0 border border-border/70">
                              {result.thumbnail ? (

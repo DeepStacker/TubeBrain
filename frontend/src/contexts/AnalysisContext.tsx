@@ -631,8 +631,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
   const handleToolClick = useCallback((toolId: string, value?: string, context?: string) => {
     if (value) {
-      setIsChatOpen(true);
       if (context) setContextSnippet(context);
+      const shouldOpenSidebar = toolId === TOOL_IDS.ASK || toolId === TOOL_IDS.DEEPDIVE || toolId === "action";
+      if (shouldOpenSidebar) {
+        setIsChatOpen(true);
+      }
       handleSendMessage(value, context, toolId);
       return;
     }

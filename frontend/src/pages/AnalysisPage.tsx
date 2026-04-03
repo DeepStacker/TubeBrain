@@ -526,6 +526,7 @@ export default function AnalysisPage() {
 
                     handleOpenTab(toolId);
                   }} 
+                  onOpenGlobalChat={() => setIsChatOpen(true)}
                   activeSidebarTab={activeSidebarTab}
                   onSidebarTabChange={setActiveSidebarTab}
                   onCloseTab={handleCloseTab}
@@ -624,6 +625,7 @@ export default function AnalysisPage() {
                       handleOpenTab(id);
                       setIsMobileLearnOpen(false); 
                     }}
+                    onOpenGlobalChat={() => setIsChatOpen(true)}
                     activeSidebarTab={activeSidebarTab}
                     onSidebarTabChange={setActiveSidebarTab}
                     onCloseTab={handleCloseTab}

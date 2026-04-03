@@ -37,8 +37,15 @@ const App = () => {
         setShowShortcutHelp(prev => !prev);
       }
     };
+    const handleOpenShortcuts = () => {
+      setShowShortcutHelp(true);
+    };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener("youtube-genius:open-shortcuts", handleOpenShortcuts as EventListener);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener("youtube-genius:open-shortcuts", handleOpenShortcuts as EventListener);
+    };
   }, []);
 
   return (

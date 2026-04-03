@@ -9,7 +9,9 @@ import {
   Settings,
   Plus,
   Check,
-  Search
+  Search,
+  Sparkles,
+  ArrowRight
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
@@ -171,6 +173,32 @@ export default function SpacePage() {
                 {notes.length} Notes
             </span>
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setIsAddVideoModalOpen(true)}
+              className="h-10 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+            >
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              Add Video
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setIsNoteModalOpen(true)}
+              className="h-10 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+            >
+              <Sparkles className="mr-2 h-3.5 w-3.5" />
+              New Note
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setActiveTab("chat")}
+              className="h-10 rounded-full px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              Open Chat
+              <ArrowRight className="ml-2 h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -213,6 +241,19 @@ export default function SpacePage() {
               exit={{ opacity: 0, x: 10 }}
               className="h-full overflow-y-auto w-full px-6 py-8"
             >
+              {spaceVideos.length === 0 && documents.length === 0 && notes.length === 0 && !isLoading ? (
+                <div className="rounded-[32px] border border-dashed border-border/70 bg-secondary/20 p-12 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl border border-border/70 bg-card shadow-sm">
+                    <FolderOpen className="h-8 w-8 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-base font-semibold text-foreground">This space is ready</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Add a video, upload a document, or create a note to start organizing this topic.</p>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <Button onClick={() => setIsAddVideoModalOpen(true)} className="rounded-2xl h-10 px-5">Add Video</Button>
+                    <Button variant="outline" onClick={() => setIsNoteModalOpen(true)} className="rounded-2xl h-10 px-5">Create Note</Button>
+                  </div>
+                </div>
+              ) : null}
               <MaterialsList 
                 videos={spaceVideos}
                 documents={documents}

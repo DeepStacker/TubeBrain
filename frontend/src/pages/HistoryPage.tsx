@@ -1,16 +1,33 @@
 import { motion } from "framer-motion";
-import { History as HistoryIcon, Trash2, ChevronRight } from "lucide-react";
+import { History as HistoryIcon, Trash2, ChevronRight, Search, Sparkles, Clock, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { useSpacesContext } from "@/contexts/SpacesContext";
 import { useAnalysisContext } from "@/contexts/AnalysisContext";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getRelativeDate } from "@/lib/utils";
 
 export default function HistoryPage() {
   const { historyItems, handleDeleteHistoryItem } = useSpacesContext();
   const { handleLoadHistoryItem } = useAnalysisContext();
   const { user } = useAuthContext();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return historyItems;
+    }
+
+    return historyItems.filter((item) => {
+      const channel = item.videoData?.channel?.toLowerCase() || "";
+      return item.title.toLowerCase().includes(query) || channel.includes(query);
+    });
+  }, [historyItems, searchQuery]);
+
+  const latestItem = historyItems[0];
 
   if (!user) {
     return (
@@ -45,11 +62,48 @@ export default function HistoryPage() {
         <p className="text-sm font-medium text-muted-foreground/60 max-w-lg leading-relaxed">
           Revisit your previously analyzed videos and continue your learning journey right where you left off.
         </p>
+        <div className="flex flex-wrap items-center gap-3 pt-3">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter by title or channel"
+              className="h-11 rounded-full border-border/70 bg-card pl-11 pr-10"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => latestItem && handleLoadHistoryItem(latestItem)}
+            disabled={!latestItem}
+            className="h-11 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+          >
+            <Clock className="mr-2 h-3.5 w-3.5" />
+            Continue Latest
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => window.dispatchEvent(new CustomEvent("youtube-genius:open-shortcuts"))}
+            className="h-11 rounded-full border border-border/70 bg-card px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground hover:bg-secondary"
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Quick Help
+          </Button>
+        </div>
       </div>
 
-      {historyItems.length > 0 ? (
+      {filteredItems.length > 0 ? (
         <div className="grid gap-4">
-          {historyItems.map((item) => (
+          {filteredItems.map((item) => (
             <motion.div 
               key={item.id} 
               initial={{ opacity: 0, y: 10 }}
@@ -100,11 +154,28 @@ export default function HistoryPage() {
           <div className="w-16 h-16 bg-secondary rounded-3xl flex items-center justify-center mx-auto mb-6 border border-border">
             <HistoryIcon className="h-7 w-7 text-muted-foreground/30" />
           </div>
-          <h3 className="text-lg font-bold text-foreground mb-1">No history yet</h3>
-          <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">Start analyzing a video and it will appear here.</p>
-          <Link to="/dashboard">
-            <Button className="rounded-xl font-semibold text-sm h-10 px-6 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10">Start Learning</Button>
-          </Link>
+          <h3 className="text-lg font-bold text-foreground mb-1">{searchQuery ? "Nothing matched your search" : "No history yet"}</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
+            {searchQuery
+              ? "Try a different title or channel name, or clear the filter to see all sessions."
+              : "Start analyzing a video and it will appear here."}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {searchQuery ? (
+              <Button onClick={() => setSearchQuery("")} variant="outline" className="rounded-xl font-semibold text-sm h-10 px-6">Clear Filter</Button>
+            ) : (
+              <Link to="/dashboard">
+                <Button className="rounded-xl font-semibold text-sm h-10 px-6 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10">Start Learning</Button>
+              </Link>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() => window.dispatchEvent(new CustomEvent("youtube-genius:open-shortcuts"))}
+              className="rounded-xl font-semibold text-sm h-10 px-6 border border-border/70 bg-card"
+            >
+              Tips
+            </Button>
+          </div>
         </div>
       )}
     </motion.div>
