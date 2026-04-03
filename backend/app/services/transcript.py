@@ -419,35 +419,30 @@ class TranscriptEngine:
             return None
 
     def _is_repetitive(self, segments: List[TranscriptSegment]) -> bool:
-        """Check if transcript segments are overly repetitive (bot detection signature)."""
-        if len(segments) < 5:
+        """Check if transcript segments are overly repetitive (hallucination detection).
+
+        Only reject OBVIOUS hallucinations where virtually all content is the same repeated phrase.
+        Natural repetitive words (like "foreign", "like", "basically") should pass.
+        """
+        if len(segments) < 20:
+            return False  # Too short to judge fairly
+
+        # EXTREME threshold: Only reject if >95% of segments are IDENTICAL repeated phrase
+        # This means real hallucinations like "I don't know I don't know I don't know..."
+        from collections import Counter
+        all_texts = [s.text.strip().lower() for s in segments if s.text.strip()]
+
+        if len(all_texts) < 20:
             return False
 
-        # Ignore common placeholder markers that appear frequently but aren't "real" content
-        placeholder_markers = {
-            '[music]', '[applause]', '[silence]', '[noise]', '[laughter]',
-            '[singing]', '[background noise]', '[traffic noise]', '[door opens]',
-            '[footsteps]', '[speaking]', '[inaudible]', '[crosstalk]', '[pause]'
-        }
+        counts = Counter(all_texts)
+        most_common_text, count = counts.most_common(1)[0]
+        percentage = count / len(all_texts)
 
-        # Check first 20 segments for real repetitive content
-        recent_texts = [
-            s.text.strip().lower()
-            for s in segments[:20]
-            if s.text.strip().lower() not in placeholder_markers
-        ]
-
-        # Only flag if REAL content repeats excessively in early segments
-        if not recent_texts:
-            return False  # All placeholders, not repetitive
-
-        from collections import Counter
-        counts = Counter(recent_texts)
-        most_common, count = counts.most_common(1)[0]
-
-        # Only reject if the same phrase appears >70% in early segments (hallucination pattern)
-        total = len(recent_texts)
-        if total > 5 and (count / total) > 0.7:
+        # Only flag if a single EXACT phrase appears in 95%+ of segments
+        # This is for catching obvious AI hallucinations
+        if percentage > 0.95:
+            logger.warning(f"Hallucinatory transcript detected: '{most_common_text}' repeated {count}/{len(all_texts)} times ({percentage*100:.1f}%)")
             return True
 
         return False
@@ -1397,47 +1392,34 @@ class TranscriptEngine:
         return "\n".join(merged_lines)
 
     def _is_repetitive(self, segments: list[TranscriptSegment]) -> bool:
-        """Detect if the transcript is mostly repetitive boilerplate (hallucinations)."""
-        if not segments:
-            return False
+        """Detect if the transcript is mostly repetitive boilerplate (hallucinations).
+
+        Only reject EXTREME cases - true AI hallucinations.
+        Lower threshold would reject legit transcripts with common repeated words.
+        """
+        if not segments or len(segments) < 20:
+            return False  # Too short to judge
 
         from collections import Counter
 
-        # Ignore common placeholder markers
-        placeholder_markers = {
-            '[music]', '[applause]', '[silence]', '[noise]', '[laughter]',
-            '[singing]', '[background noise]', '[traffic noise]', '[door opens]',
-            '[footsteps]', '[speaking]', '[inaudible]', '[crosstalk]', '[pause]'
-        }
-
-        # Normalize text for counting, excluding placeholders
-        normalized = [
+        # Count ALL segment texts (including context)
+        all_texts = [
             s.text.strip().lower()
             for s in segments
-            if s.text.strip() and s.text.strip().lower() not in placeholder_markers
+            if s.text.strip()
         ]
 
-        if not normalized:
-            return False  # All placeholders, not repetitive
-
-        counts = Counter(normalized)
-        if not counts:
+        if not all_texts or len(all_texts) < 20:
             return False
 
+        counts = Counter(all_texts)
         most_common_text, count = counts.most_common(1)[0]
-        total = len(normalized)
+        total = len(all_texts)
 
-        # ONLY flag if a phrase dominates the transcript (hallucination signature)
-        # If >50% of content is a single repeated phrase = likely hallucination
-        # Natural repetition of common words is OK
-        if total > 10 and (count / total) > 0.5:
-            logger.warning(f"Repetitive transcript detected: '{most_common_text}' repeated {count}/{total} times ({(count/total)*100:.1f}%)")
-            return True
-
-        # If total is very small AND repetitive, could be hallucination
-        # But only if the phrase is EXTREMELY repetitive (90%+)
-        if total <= 10 and (count / total) > 0.9:
-            logger.warning(f"Highly repetitive short transcript: '{most_common_text}' repeated {count}/{total} times")
+        # EXTREME threshold: Only flag if >95% of all segments are identical (obvious hallucination)
+        # Legitimate transcripts might have "uh" appear 30 times out of 500 segments = 6% (OK)
+        if total > 20 and (count / total) > 0.95:
+            logger.warning(f"Hallucinatory transcript: '{most_common_text}' = {count}/{total} times ({(count/total)*100:.1f}%)")
             return True
 
         return False
