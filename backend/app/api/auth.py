@@ -576,3 +576,29 @@ async def linkedin_oauth_get_callback(request: Request, code: str, state: str, d
     response.delete_cookie("oauth_state")
     return response
 
+
+# ──────────────────────────────────────────────
+# PASSWORD RESET (simple admin endpoint)
+# ──────────────────────────────────────────────
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    email: str,
+    new_password: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset user password (admin/development endpoint).
+    In production, this should require email verification or admin privileges.
+    """
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update password
+    user.hashed_password = get_password_hash(new_password)
+    await db.commit()
+    
+    return MessageResponse(message=f"Password reset successfully for {email}")
