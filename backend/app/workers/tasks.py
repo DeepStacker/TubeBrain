@@ -296,58 +296,13 @@ async def process_video_analysis(
 
             await db.commit()  # SAVE NOW - user gets results here regardless of Phase 2
 
-            # PHASE 2: AI SYNTHESIS (Background, 30-60s)
-            # This continues but doesn't block the user from seeing transcript
-            logger.info(f"Analysis {analysis_id}: PHASE 2 - AI synthesis starting (async)...")
+            # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
+            # Phase 1 now completes at 50%, user immediately sees transcript + chapters
+            # User can then click "Generate Quiz", "Generate Overview", etc. to request AI tools
+            # This ensures fast initial load without auto-waiting for AI synthesis
 
-            # Safety check: if still no transcripts, skip synthesis
-            if not all_transcripts:
-                logger.warning(f"Analysis {analysis_id}: No transcripts available even after fallbacks, skipping Phase 2")
-                return
-
-            combined_transcript = "\n\n---\n\n".join(all_transcripts)
-            word_count = len(combined_transcript.split())
-            is_ultra_scale = word_count > 50000
-
-            primary_metadata = all_metadata[0] if all_metadata else {}
-
-            try:
-                # Shorter timeout for synthesis
-                async with asyncio.timeout(30.0 if not is_ultra_scale else 60.0):
-                    ai_result = await synthesize_content(
-                        transcript_text=combined_transcript,
-                        metadata=primary_metadata,
-                        expertise=expertise,
-                        style=style,
-                        language=language,
-                        is_multi_video=len(video_ids) > 1,
-                        minimal_mode=not full_analysis,
-                    )
-
-                # Store AI results
-                mappingFields = [
-                    "overview", "key_points", "takeaways", "timestamps", "tags",
-                    "roadmap", "quiz", "mind_map", "flashcards", "glossary",
-                    "resources", "podcast", "learning_context"
-                ]
-                for field in mappingFields:
-                    val = ai_result.get(field)
-                    if val:
-                        setattr(analysis, field, val)
-
-                phase2_elapsed = time.time() - start_time - phase1_elapsed
-                logger.info(f"Analysis {analysis_id}: PHASE 2 complete in {phase2_elapsed:.1f}s ✓")
-
-            except asyncio.TimeoutError:
-                logger.warning(f"Analysis {analysis_id}: AI synthesis timeout (user still has transcript)")
-            except Exception as ai_err:
-                logger.warning(f"Analysis {analysis_id}: AI synthesis failed: {str(ai_err)[:200]}")
-
-            analysis.progress_percentage = 100
-            await db.commit()
-
-            total_elapsed = time.time() - start_time
-            logger.info(f"Analysis {analysis_id}: Complete in {total_elapsed:.1f}s (Phase1: {phase1_elapsed:.1f}s, Phase2: {total_elapsed-phase1_elapsed:.1f}s)")
+            logger.info(f"Analysis {analysis_id}: PHASE 1 complete - transferring to on-demand synthesis")
+            return  # End here - Phase 2 happens on-demand via API calls
 
         except Exception as e:
             logger.error(f"Analysis {analysis_id} failed: {e}", exc_info=True)

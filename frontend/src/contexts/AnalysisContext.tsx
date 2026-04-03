@@ -155,16 +155,19 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
             transcriptLoaded = true;
             finalData = data;
-            logger.info("Phase 1 complete: Transcript loaded at 50% progress");
+            logger.info("Phase 1 complete: Transcript + Chapters loaded at 50% progress (Phase 2 is on-demand)");
 
-            // Don't mark as complete yet - continue polling for Phase 2
+            // Mark as complete since Phase 2 is now on-demand (no auto-synthesis)
+            // Polling can stop here - user will trigger AI tools manually via buttons
+            allDataComplete = true;
             setAnalysisStatus("completed");
           } catch (e) {
             logger.warn("Failed to load transcript at 50%:", e);
           }
         }
 
-        // PHASE 2: All synthesis complete at 100% progress
+        // PHASE 2: If user manually generates tools, progress may update to 100%
+        // This handles the case where user clicks "Generate Quiz", etc.
         if (statusData.progress_percentage === 100 && statusData.status === "completed") {
           try {
             const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
@@ -174,9 +177,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             allDataComplete = true;
             setAnalysisProgress(100);
             setAnalysisStatus("completed");
-            logger.info("Phase 2 complete: All AI synthesis ready at 100% progress");
+            logger.info("Manual tool generation complete: Progress updated to 100%");
           } catch (e) {
-            logger.warn("Failed to load final data at 100%:", e);
+            logger.warn("Failed to load updated data at 100%:", e);
           }
         } else if (statusData.status === "failed") {
           setAnalysisStatus("failed");
