@@ -303,15 +303,20 @@ async def process_video_analysis(
                     from app.services.ai_pipeline import generate_chapters_from_transcript
                     transcript_text = all_transcripts[0]
 
+                    # Get language from metadata or use default
+                    lang = 'en'
+                    if all_metadata and len(all_metadata) > 0:
+                        lang = all_metadata[0].get('language', 'en') or 'en'
+
                     # Generate chapters with 5s timeout
                     chapter_gen_start = time.time()
                     chapters = await asyncio.wait_for(
                         generate_chapters_from_transcript(
                             transcript_text,
-                            language=getattr(video, 'language', 'en') if video else 'en',
+                            language=lang,
                             provider=analysis.ai_provider,
                             model=analysis.ai_model,
-                            duration_seconds=video.duration_seconds if video else 0,
+                            duration_seconds=0,
                         ),
                         timeout=5.0
                     )
