@@ -122,7 +122,7 @@ async def _generate_chapters_background(
                 model=model,
                 duration_seconds=duration_seconds,  # Pass video duration
             ),
-            timeout=40.0  # Optimized: 40s max (smart sampling reduces processing time)
+            timeout=30.0  # Optimized: 30s max (segment sampling + higher tokens = cleaner output, still fast)
         )
         gen_elapsed = time.time() - gen_start
 

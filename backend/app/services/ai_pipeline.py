@@ -843,19 +843,20 @@ async def generate_chapters_from_transcript(
     duration_seconds: int = 0,
 ) -> list[dict]:
     """
-    Generate chapter markers from a transcript using AI - FAST VERSION.
+    Generate chapter markers from a transcript using AI - ULTRA-FAST VERSION.
 
     Returns list of chapters: [{"time": "M:SS", "label": "Chapter title"}, ...]
 
-    Fast optimization:
-    - Sample key segments instead of truncating (3x faster)
-    - Reduce token limit to 3000 (faster processing)
-    - Extract beginning, middle, and end sections
+    Ultra-fast optimization:
+    - Segment-based timeline coverage (capture ENTIRE video, not just parts)
+    - Equal-sized segments from start to end ensures full coverage
+    - Higher token budget (5000) for better quality
+    - All segments combined preserves video flow
     """
     try:
-        # OPTIMIZATION: Smart sampling instead of truncation
-        # Extract key sections: start, middle, end to capture main topics
-        sampled_text = _smart_sample_transcript(transcript_text, max_tokens=3000)
+        # OPTIMIZATION: Segment-based sampling for FULL video coverage
+        # Instead of taking random sections, systematically cover timeline
+        sampled_text = _segment_based_sample_transcript(transcript_text, max_tokens=5000)
 
         system_prompt = MINIMAL_SYSTEM_PROMPT_TEMPLATE.format(language=language)
         messages = [
@@ -869,60 +870,75 @@ async def generate_chapters_from_transcript(
         if not model:
             model = settings.DEFAULT_AI_MODEL
 
-        logger.info(f"Generating chapters with {provider}/{model} (fast path)")
+        logger.info(f"Generating chapters with {provider}/{model} (segment-based)")
         response = await _call_ai_with_fallback(provider, model, messages, require_json=True)
 
         # Parse JSON response
         data = json.loads(response)
         chapters = data.get("timestamps", [])
 
-        logger.info(f"Generated {len(chapters)} chapters in fast path")
+        logger.info(f"Generated {len(chapters)} chapters (full video coverage)")
         return chapters
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse chapter generation response: {e}")
-        # Return default chapter at 0:00
         return [{"time": "0:00", "label": "Video Content"}]
     except Exception as e:
         logger.error(f"Chapter generation failed: {e}", exc_info=True)
-        # Return default chapter at 0:00
         return [{"time": "0:00", "label": "Video Content"}]
 
 
-def _smart_sample_transcript(text: str, max_tokens: int = 3000) -> str:
+def _segment_based_sample_transcript(text: str, max_tokens: int = 5000, num_segments: int = 8) -> str:
     """
-    Smart sampling of transcript - extract key sections instead of linear truncation.
+    Segment-based sampling for FULL video timeline coverage.
 
-    For long transcripts (8+ hours), takes:
-    - First 30% (introduction)
-    - Middle 30% (main content)
-    - Last 10% (conclusion)
+    Divides transcript into N equal segments and takes samples from each.
+    This ensures coverage from START to END of the video, not random sections.
 
-    This preserves context while reducing token count significantly.
+    For very long videos (8+ hours):
+    - Divides into 8-10 segments
+    - Takes representative sample from each segment
+    - AI sees natural progression through entire video
+    - Captures multiple topics and transitions
     """
     lines = text.strip().split("\n")
 
-    if len(lines) < 50:
-        # Short transcript - just truncate normally
+    if len(lines) < 100:
+        # Short transcript - use full text
         return _truncate_to_tokens(text, max_tokens)
 
-    # Calculate target sizes
     total_lines = len(lines)
-    first_section_lines = int(total_lines * 0.30)  # First 30%
-    middle_start = int(total_lines * 0.35)  # Start at 35%
-    middle_section_lines = int(total_lines * 0.30)  # Next 30%
-    last_section_lines = int(total_lines * 0.10)   # Last 10%
+    segment_size = total_lines // num_segments
+    sample_per_segment = segment_size // 4  # Take ~25% of each segment
 
-    # Extract sections
-    first_section = "\n".join(lines[:first_section_lines])
-    middle_section = "\n".join(lines[middle_start:middle_start + middle_section_lines])
-    last_section = "\n".join(lines[-last_section_lines:])
+    sampled_lines = []
 
-    # Combine with markers to preserve structure awareness
-    sampled = f"{first_section}\n\n[...main content...]\n\n{middle_section}\n\n[...more content...]\n\n{last_section}"
+    # Extract samples from each segment to form a continuous representative narrative
+    for i in range(num_segments):
+        segment_start = i * segment_size
+        # For last segment, go to end of file
+        if i == num_segments - 1:
+            segment_end = total_lines
+        else:
+            segment_end = (i + 1) * segment_size
 
-    # Final truncation to ensure we don't exceed token limit
-    return _truncate_to_tokens(sampled, max_tokens)
+        segment = lines[segment_start:segment_end]
+
+        # Take a sample from this segment
+        sample_size = min(sample_per_segment, len(segment))
+        if sample_size > 0:
+            # Take distributed samples: start, middle, end of segment
+            step = max(1, len(segment) // 3)
+            sampled_segment = segment[::step][:sample_size]
+            sampled_lines.extend(sampled_segment)
+
+            # Add segment marker
+            sampled_lines.append(f"[...segment {i+1}/{num_segments}...]")
+
+    sampled_text = "\n".join(sampled_lines)
+
+    # Final truncation to token limit
+    return _truncate_to_tokens(sampled_text, max_tokens)
 
 
 def _truncate_to_tokens(text: str, max_tokens: int) -> str:

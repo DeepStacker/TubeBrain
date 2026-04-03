@@ -296,16 +296,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
               } catch (error) {
                 logger.error("Error fetching fresh data:", error);
               }
-            } else if (attempts >= 120) {
-              // Timeout reached - exit polling after 2 minutes
-              logger.info("Stopped polling for background chapters (2min timeout)");
+            } else if (attempts >= 60) {
+              // Timeout reached - exit polling after 1 minute (backend timeout is 30s)
+              logger.info("Stopped polling for background chapters (1min timeout)");
               allDataComplete = true;
             }
           } catch (e) {
             logger.debug("Background chapter check failed:", e);
           }
-        } else if (transcriptLoaded && attempts >= 120) {
-          // Exit if 2 minute timeout reached
+        } else if (transcriptLoaded && attempts >= 60) {
+          // Exit if 1 minute timeout reached
           allDataComplete = true;
         } else if (statusData.status === "failed") {
           setAnalysisStatus("failed");
