@@ -1,0 +1,132 @@
+# Render.com deployment configuration
+# Optimized for free tier: Frontend as static site + Backend+Worker combined
+
+services:
+  # ── Combined Backend + Worker Service ──
+  # Runs FastAPI API server + ARQ background worker together
+  # Memory: ~200-350 MB (fits in 512 MB free tier)
+  - type: web
+    name: tubebrain-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      # Port (Render sets this automatically)
+      - key: PORT
+        value: 10000
+      
+      # App settings
+      - key: APP_NAME
+        value: TubeBrain
+      - key: DEBUG
+        value: false
+      
+      # Database (Supabase PostgreSQL)
+      - key: DATABASE_URL
+        sync: false
+      
+      # Redis (Upstash)
+      - key: REDIS_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      
+      # JWT & Auth secrets
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      
+      # OAuth providers (set in Render dashboard)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      
+      # OAuth redirect URLs (update after deployment)
+      - key: OAUTH_REDIRECT_BASE
+        value: https://tubebrain-api.onrender.com
+      - key: FRONTEND_URL
+        value: https://tubebrain.onrender.com
+      
+      # AI Providers (set in Render dashboard)
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GOOGLE_AI_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      
+      # AI defaults
+      - key: DEFAULT_AI_PROVIDER
+        value: groq
+      - key: DEFAULT_AI_MODEL
+        value: llama-3.3-70b-versatile
+      
+      # Razorpay (set in Render dashboard)
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      
+      # Web crawling APIs (set in Render dashboard)
+      - key: JINA_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: SPIDER_API_KEY
+        sync: false
+      
+      # Supabase (optional, for storage)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      
+      # CORS
+      - key: ALLOWED_ORIGINS
+        value: https://tubebrain.onrender.com,http://localhost:3000,http://localhost:8080
+
+  # ── Static Frontend ──
+  # Deployed as static site - NO runtime memory needed!
+  # Vite builds to static HTML/JS/CSS, served directly by Render CDN
+  # This is FREE and doesn't count against service limits
+  - type: static
+    name: tubebrain
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      # SPA fallback - all routes serve index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://tubebrain-api.onrender.com

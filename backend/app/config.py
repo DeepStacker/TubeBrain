@@ -17,8 +17,10 @@ class Settings(BaseSettings):
     # ── Database ──
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/youtube_genius"
 
-    # ── Redis ──
+    # ── Redis (Upstash) ──
     REDIS_URL: str = "redis://localhost:6379/0"
+    UPSTASH_REDIS_REST_URL: str = ""
+    UPSTASH_REDIS_REST_TOKEN: str = ""
 
     # ── Auth (JWT) ──
     JWT_SECRET: str = "jwt-secret-change-me"

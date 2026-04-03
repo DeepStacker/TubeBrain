@@ -1,35 +1,15 @@
 version: "3.9"
 
 services:
-  # ── PostgreSQL with pgvector ──
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: youtube_genius
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # ── PostgreSQL (using Supabase cloud service) ──
+  # Local PostgreSQL container removed - now using Supabase PostgreSQL
+  # Set DATABASE_URL in backend/.env to your Supabase connection string:
+  # DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
 
-  # ── Redis ──
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # ── Redis (using Upstash cloud service) ──
+  # Local Redis container removed - now using Upstash Redis
+  # Set REDIS_URL in backend/.env to your Upstash Redis URL:
+  # REDIS_URL=rediss://default:<token>@<host>.upstash.io:6379
 
   # ── FastAPI Backend ──
   backend:
@@ -39,16 +19,10 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/youtube_genius
-      - REDIS_URL=redis://redis:6379/0
       - OAUTH_REDIRECT_BASE=http://localhost:8000
+      # DATABASE_URL and REDIS_URL are loaded from ./backend/.env (cloud services)
     ports:
       - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     volumes:
       - ./backend:/app
     command: >
@@ -62,14 +36,7 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/youtube_genius
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # DATABASE_URL and REDIS_URL are loaded from ./backend/.env (cloud services)
     volumes:
       - ./backend:/app
     command: >
@@ -89,7 +56,3 @@ services:
       - ./frontend:/app
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0
-
-volumes:
-  pgdata:
-  redisdata:

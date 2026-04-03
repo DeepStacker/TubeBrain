@@ -40,9 +40,15 @@ async def _get_redis_pool():
     import urllib.parse
 
     parsed = urllib.parse.urlparse(settings.REDIS_URL)
+    
+    # Determine if SSL is needed (rediss:// scheme)
+    use_ssl = parsed.scheme == 'rediss'
+    
     redis_settings = RedisSettings(
         host=parsed.hostname or "localhost",
         port=parsed.port or 6379,
+        password=parsed.password,
+        ssl=use_ssl,
     )
     return await create_pool(redis_settings)
 
@@ -666,7 +672,16 @@ class WorkerSettings:
     import urllib.parse
     
     parsed = urllib.parse.urlparse(settings.REDIS_URL)
-    redis_settings = RedisSettings(host=parsed.hostname or 'localhost', port=parsed.port or 6379)
+    
+    # Determine if SSL is needed (rediss:// scheme)
+    _use_ssl = parsed.scheme == 'rediss'
+    
+    redis_settings = RedisSettings(
+        host=parsed.hostname or 'localhost',
+        port=parsed.port or 6379,
+        password=parsed.password,
+        ssl=_use_ssl,
+    )
 
     @staticmethod
     async def on_startup(ctx):

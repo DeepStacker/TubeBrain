@@ -18,7 +18,12 @@ if config.config_file_name is not None:
 # Override with environment variable if present
 db_url = os.getenv("DATABASE_URL")
 if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+    # Escape % for configparser interpolation (% -> %%)
+    db_url_escaped = db_url.replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", db_url_escaped)
+
+# Detect if using Supabase pooler (pgbouncer) which requires statement_cache_size=0
+is_supabase_pooler = db_url and 'pooler.supabase.com' in db_url
 
 target_metadata = Base.metadata
 
@@ -42,10 +47,17 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations() -> None:
+    # Build connect_args for pgbouncer compatibility
+    connect_args = {}
+    if is_supabase_pooler:
+        connect_args["prepared_statement_cache_size"] = 0
+        connect_args["statement_cache_size"] = 0
+    
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

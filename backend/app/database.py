@@ -12,12 +12,23 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# Determine if using Supabase/pgbouncer (pooler URL contains 'pooler.supabase.com')
+# pgbouncer in transaction mode requires statement_cache_size=0
+is_supabase_pooler = 'pooler.supabase.com' in settings.DATABASE_URL
+
+connect_args = {}
+if is_supabase_pooler:
+    # Disable prepared statement caching for pgbouncer compatibility
+    connect_args["prepared_statement_cache_size"] = 0
+    connect_args["statement_cache_size"] = 0
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     pool_size=20,
     max_overflow=10,
     pool_pre_ping=True,
+    connect_args=connect_args,
 )
 
 async_session_factory = async_sessionmaker(
