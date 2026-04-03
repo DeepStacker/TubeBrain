@@ -104,6 +104,60 @@ async def enqueue_document_processing(
 # BACKGROUND HELPERS
 # ──────────────────────────────────────────────
 
+async def process_chapter_generation(
+    ctx: dict,
+    analysis_id: str,
+    transcript_text: str,
+    language: str,
+    provider: str,
+    model: str,
+    duration_seconds: int = 0,
+):
+    """ARQ worker task: Generate chapters and update database."""
+    try:
+        from app.services.ai_pipeline import generate_chapters_from_transcript
+        from uuid import UUID
+
+        logger.info(f"ARQ Worker: Starting chapter generation for analysis {analysis_id}")
+        gen_start = time.time()
+
+        ai_chapters = await asyncio.wait_for(
+            generate_chapters_from_transcript(
+                transcript_text,
+                language=language,
+                provider=provider,
+                model=model,
+                duration_seconds=duration_seconds,
+            ),
+            timeout=30.0
+        )
+        gen_elapsed = time.time() - gen_start
+
+        if ai_chapters and len(ai_chapters) > 1:
+            logger.info(f"ARQ Worker: Generated {len(ai_chapters)} chapters in {gen_elapsed:.1f}s")
+
+            # Update database with AI-generated chapters
+            async with async_session_factory() as db:
+                try:
+                    analysis = await db.scalar(
+                        select(Analysis).where(Analysis.id == UUID(analysis_id))
+                    )
+                    if analysis:
+                        analysis.timestamps = ai_chapters
+                        analysis.status_message = f"Chapters generated ({len(ai_chapters)} chapters)"
+                        await db.commit()
+                        logger.info(f"ARQ Worker: Updated analysis {analysis_id} with {len(ai_chapters)} AI chapters")
+                except Exception as e:
+                    logger.error(f"ARQ Worker: Failed to update chapters for {analysis_id}: {e}")
+        else:
+            logger.warning(f"ARQ Worker: Chapter generation produced no improvement")
+
+    except asyncio.TimeoutError:
+        logger.warning(f"ARQ Worker: Chapter generation timed out for {analysis_id}")
+    except Exception as e:
+        logger.error(f"ARQ Worker: Chapter generation failed for {analysis_id}: {e}", exc_info=True)
+
+
 async def _generate_chapters_background(
     analysis_id: str,
     transcript_text: str,
@@ -377,8 +431,11 @@ async def process_video_analysis(
                 if video and hasattr(video, 'duration_seconds'):
                     duration_seconds = video.duration_seconds or 0
 
-                asyncio.create_task(
-                    _generate_chapters_background(
+                # Queue chapter generation as proper background job via ARQ
+                # This ensures it completes even if FastAPI is busy
+                try:
+                    await pool.enqueue_job(
+                        'app.workers.tasks.process_chapter_generation',
                         analysis_id=str(analysis_id),
                         transcript_text=all_transcripts[0],
                         language=all_metadata[0].get('language', 'en') or 'en' if all_metadata else 'en',
@@ -386,8 +443,20 @@ async def process_video_analysis(
                         model=analysis.ai_model,
                         duration_seconds=duration_seconds,
                     )
-                )
-                logger.info(f"Analysis {analysis_id}: Spawned background chapter generation task (duration: {duration_seconds}s)")
+                    logger.info(f"Analysis {analysis_id}: Queued background chapter generation via ARQ")
+                except Exception as e:
+                    logger.warning(f"Analysis {analysis_id}: Failed to queue ARQ job, will use fallback: {e}")
+                    # Fallback to in-process background task if ARQ fails
+                    asyncio.create_task(
+                        _generate_chapters_background(
+                            analysis_id=str(analysis_id),
+                            transcript_text=all_transcripts[0],
+                            language=all_metadata[0].get('language', 'en') or 'en' if all_metadata else 'en',
+                            provider=analysis.ai_provider,
+                            model=analysis.ai_model,
+                            duration_seconds=duration_seconds,
+                        )
+                    )
 
             # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
             # Phase 1 now returns at 100% (~8-15s) with transcript + chapters (metadata or default)
@@ -665,7 +734,7 @@ async def _get_video(db, video_id: UUID) -> Video | None:
 
 class WorkerSettings:
     """ARQ worker settings — run with: arq app.workers.tasks.WorkerSettings"""
-    functions = [process_video_analysis, process_upload, process_document]
+    functions = [process_video_analysis, process_upload, process_document, process_chapter_generation]
     
     # Use the Redis URL from settings
     from arq.connections import RedisSettings
