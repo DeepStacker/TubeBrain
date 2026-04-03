@@ -24,8 +24,14 @@ export default defineConfig(({ mode }) => ({
         manualChunks: (id) => {
           // Vendor chunks - split by size and purpose
           if (id.includes("node_modules")) {
-            // React core
-            if (id.includes("react-dom") || id.includes("react/")) {
+            // React core - MUST include scheduler and jsx-runtime
+            if (
+              id.includes("react-dom") || 
+              id.includes("react/") ||
+              id.includes("/react.") ||
+              id.includes("scheduler") ||
+              id.includes("react-is")
+            ) {
               return "vendor-react";
             }
             // Router and routing
@@ -62,9 +68,13 @@ export default defineConfig(({ mode }) => ({
             if (id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-")) {
               return "vendor-markdown";
             }
-            // State / data
+            // State / data (keep with React to avoid context issues)
             if (id.includes("@tanstack") || id.includes("zustand") || id.includes("jotai")) {
               return "vendor-state";
+            }
+            // Supabase client
+            if (id.includes("@supabase")) {
+              return "vendor-supabase";
             }
             return "vendor-other";
           }
