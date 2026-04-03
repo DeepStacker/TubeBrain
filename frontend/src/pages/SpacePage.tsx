@@ -12,7 +12,7 @@ import {
   Search
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSpacesContext } from "@/contexts/SpacesContext";
 import { useAnalysisContext } from "@/contexts/AnalysisContext";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -25,6 +25,20 @@ import MaterialsList from "@/components/MaterialsList";
 import SpaceChat from "@/components/SpaceChat";
 import { fetchSpaceDocuments, fetchSpaceNotes, getDocumentUrl } from "@/lib/storage";
 import type { DocumentData, NoteData } from "@/types";
+
+const getSpaceTabStorageKey = (spaceId: string | undefined) => `youtube-genius:space-tab:${spaceId || "default"}`;
+
+const loadSpaceTab = (spaceId: string | undefined) => {
+  if (typeof window === "undefined") {
+    return "materials";
+  }
+
+  try {
+    return window.localStorage.getItem(getSpaceTabStorageKey(spaceId)) as "materials" | "chat" | null || "materials";
+  } catch {
+    return "materials";
+  }
+};
 
 export default function SpacePage() {
   const { spaceId } = useParams<{ spaceId: string }>();
@@ -44,7 +58,7 @@ export default function SpacePage() {
   const { handleLoadHistoryItem } = useAnalysisContext();
   const { user } = useAuthContext();
 
-  const [activeTab, setActiveTab] = useState<"materials" | "chat">("materials");
+  const [activeTab, setActiveTab] = useState<"materials" | "chat">(() => loadSpaceTab(spaceId));
   const [documents, setDocuments] = useState<DocumentData[]>([]);
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,13 +73,7 @@ export default function SpacePage() {
     selectedSpace?.videoIds.includes(h.videoIds?.[0])
   );
 
-  useEffect(() => {
-    if (spaceId) {
-      loadMaterials();
-    }
-  }, [spaceId, spaces]);
-
-  const loadMaterials = async () => {
+  const loadMaterials = useCallback(async () => {
     setIsLoading(true);
     try {
       if (spaceId) {
@@ -81,7 +89,25 @@ export default function SpacePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [spaceId]);
+
+  useEffect(() => {
+    if (spaceId) {
+      void loadMaterials();
+    }
+  }, [spaceId, loadMaterials]);
+
+  useEffect(() => {
+    setActiveTab(loadSpaceTab(spaceId));
+  }, [spaceId]);
+
+  useEffect(() => {
+    if (!spaceId || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(getSpaceTabStorageKey(spaceId), activeTab);
+  }, [activeTab, spaceId]);
 
   const handleCreateNoteSubmit = async () => {
     if (spaceId && newNote.title && newNote.content) {
@@ -213,6 +239,7 @@ export default function SpacePage() {
               <SpaceChat 
                 spaceId={spaceId!}
                 onSendChat={handleSendChat}
+                spaceName={selectedSpace.name}
               />
             </motion.div>
           )}

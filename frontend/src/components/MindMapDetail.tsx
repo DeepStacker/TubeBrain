@@ -62,8 +62,8 @@ const CustomNode = ({ data, selected }: any) => {
   
   return (
     <div className={cn(
-      "group relative px-6 py-4 rounded-[2.5rem] bg-white border-2 transition-all duration-500 min-w-[220px] shadow-xl",
-      selected ? "border-indigo-600 ring-8 ring-indigo-50 shadow-indigo-100" : "border-gray-100 hover:border-indigo-200 shadow-black/5",
+      "group relative min-w-[220px] rounded-[2.5rem] border-2 bg-card px-6 py-4 shadow-xl transition-all duration-500",
+      selected ? "border-indigo-600 ring-8 ring-indigo-500/15 shadow-indigo-500/20" : "border-border hover:border-indigo-300/50 shadow-black/5",
       data.isHighlighted && "ring-4 ring-yellow-400 border-yellow-400",
       data.isDimmed && "opacity-30 scale-95"
     )}>
@@ -71,21 +71,21 @@ const CustomNode = ({ data, selected }: any) => {
       
       <div className="flex flex-col gap-1 text-center">
         {data.timestamp !== undefined && (
-          <div className="mx-auto bg-indigo-50 text-indigo-600 text-[9px] font-black px-2.5 py-0.5 rounded-full mb-1 uppercase tracking-widest border border-indigo-100">
+          <div className="mx-auto mb-1 rounded-full border border-indigo-300/50 bg-indigo-500/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-indigo-600">
             {Math.floor(data.timestamp / 60)}:{(data.timestamp % 60).toString().padStart(2, '0')}
           </div>
         )}
         <h3 className={cn(
-          "text-sm font-black tracking-tight",
-          isTheory ? "text-indigo-900" : isPractitioner ? "text-emerald-900" : "text-gray-900"
+          "text-sm font-semibold tracking-tight",
+          isTheory ? "text-indigo-600" : isPractitioner ? "text-emerald-600" : "text-foreground"
         )}>{data.label}</h3>
         {data.details && (
-          <p className="text-[10px] text-gray-400 font-medium line-clamp-2 mt-1 leading-normal">{data.details}</p>
+          <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-normal text-muted-foreground">{data.details}</p>
         )}
       </div>
 
       {/* Type Badge */}
-      <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center">
+      <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card shadow-sm">
         {isTheory ? <Info className="h-3 w-3 text-indigo-400" /> : isPractitioner ? <Activity className="h-3 w-3 text-emerald-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
       </div>
 
@@ -104,7 +104,7 @@ const CustomNode = ({ data, selected }: any) => {
         {data.timestamp !== undefined && (
           <button 
             onClick={(e) => { e.stopPropagation(); data.onTimestamp(data.timestamp); }}
-            className="p-2.5 bg-black text-white rounded-2xl shadow-xl hover:bg-gray-800 hover:scale-110 active:scale-95 transition-all"
+            className="rounded-2xl bg-primary p-2.5 text-primary-foreground shadow-xl transition-all hover:scale-110 hover:bg-primary/90 active:scale-95"
             title="Jump to Video"
           >
             <Play className="h-4 w-4 fill-current" />
@@ -112,7 +112,7 @@ const CustomNode = ({ data, selected }: any) => {
         )}
         <button 
           onClick={(e) => { e.stopPropagation(); data.onAction('expand', data.label, data.id); }}
-          className="p-2.5 bg-white text-indigo-600 border-2 border-indigo-50 rounded-2xl shadow-xl hover:bg-indigo-50 hover:scale-110 active:scale-95 transition-all"
+          className="rounded-2xl border-2 border-indigo-300/40 bg-card p-2.5 text-indigo-600 shadow-xl transition-all hover:scale-110 hover:bg-indigo-500/10 active:scale-95"
           title="Expand Branch"
         >
           <PlusCircle className="h-4 w-4" />
@@ -258,7 +258,7 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
   };
 
   return (
-    <div className="relative w-full h-full bg-slate-50/30">
+    <div className="relative h-full w-full bg-background">
         <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -279,18 +279,18 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
             fitViewOptions={{ padding: 0.2 }}
             className="bg-dot-pattern"
         >
-            <Background variant={BackgroundVariant.Dots} gap={32} size={1} color="#e2e8f0" />
+            <Background variant={BackgroundVariant.Dots} gap={32} size={1} color="hsl(var(--border))" />
             
             <Panel position="top-left" className="m-4 flex flex-col gap-3">
-                <div className="p-5 bg-white/90 backdrop-blur-2xl border border-white shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2.5rem] max-w-[340px]">
+              <div className="max-w-[340px] rounded-[2.5rem] border border-border/70 bg-card/90 p-5 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)]">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-[1.2rem] bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-lg shadow-indigo-500/30">
                                 <Compass className="h-6 w-6" />
                             </div>
                             <div>
-                                <h3 className="text-base font-black text-gray-900 leading-tight">Mastery Map</h3>
-                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mt-0.5">Knowledge Graph</p>
+                      <h3 className="text-base font-semibold leading-tight text-foreground">Mastery Map</h3>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-indigo-500">Knowledge Graph</p>
                             </div>
                         </div>
                         <Button 
@@ -298,52 +298,52 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
                             size="icon" 
                             onClick={() => onAIAction?.('mind_map', 'Regenerate this mind map.')}
                             disabled={isGenerating}
-                            className="h-10 w-10 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all"
+                            className="h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-indigo-500/10 hover:text-indigo-600"
                             title="Regenerate Mind Map"
                         >
                             <RefreshCw className={cn("h-4 w-4", isGenerating && "animate-spin")} />
                         </Button>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-50 rounded-2xl border border-gray-100 mb-4">
+                    <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl border border-border bg-secondary p-1">
                         <button 
                             onClick={() => setExplorationMode('free')}
                             className={cn(
                                 "flex flex-col items-center gap-1 py-3 rounded-xl transition-all",
-                                explorationMode === 'free' ? "bg-white text-indigo-600 shadow-sm border border-gray-100" : "text-gray-400 hover:text-gray-600"
+                                explorationMode === 'free' ? "border border-border bg-card text-indigo-600 shadow-sm" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
                             <Eye className="h-4 w-4" />
-                            <span className="text-[9px] font-black uppercase tracking-tighter">Free</span>
+                            <span className="text-[9px] font-semibold uppercase tracking-tighter">Free</span>
                         </button>
                         <button 
                             onClick={() => setExplorationMode('focus')}
                             className={cn(
                                 "flex flex-col items-center gap-1 py-3 rounded-xl transition-all",
-                                explorationMode === 'focus' ? "bg-white text-indigo-600 shadow-sm border border-gray-100" : "text-gray-400 hover:text-gray-600"
+                                explorationMode === 'focus' ? "border border-border bg-card text-indigo-600 shadow-sm" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
                             <Target className="h-4 w-4" />
-                            <span className="text-[9px] font-black uppercase tracking-tighter">Focus</span>
+                            <span className="text-[9px] font-semibold uppercase tracking-tighter">Focus</span>
                         </button>
                         <button 
                             onClick={() => setExplorationMode('trailblazer')}
                             className={cn(
                                 "flex flex-col items-center gap-1 py-3 rounded-xl transition-all",
-                                explorationMode === 'trailblazer' ? "bg-white text-indigo-600 shadow-sm border border-gray-100" : "text-gray-400 hover:text-gray-600"
+                                explorationMode === 'trailblazer' ? "border border-border bg-card text-indigo-600 shadow-sm" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
                             <Activity className="h-4 w-4" />
-                            <span className="text-[9px] font-black uppercase tracking-tighter">Path</span>
+                            <span className="text-[9px] font-semibold uppercase tracking-tighter">Path</span>
                         </button>
                     </div>
 
                     <div className="space-y-3">
-                        <div className="flex items-center justify-between text-[11px] font-black uppercase text-gray-400 px-1">
+                        <div className="flex items-center justify-between px-1 text-[11px] font-semibold uppercase text-muted-foreground">
                             <span className="flex items-center gap-1.5"><Zap className="h-3 w-3 text-amber-400" /> Mastery</span>
-                            <span className="text-gray-900">{nodes.length} Concepts</span>
+                          <span className="text-foreground">{nodes.length} Concepts</span>
                         </div>
-                        <div className="h-2 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100">
+                        <div className="h-2 w-full overflow-hidden rounded-full border border-border bg-secondary">
                             <motion.div 
                                 initial={{ width: 0 }}
                                 animate={{ width: `${Math.min(nodes.length * 5, 100)}%` }}
@@ -357,27 +357,27 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
                     <motion.div 
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="px-6 py-3 bg-indigo-600 text-white rounded-full shadow-2xl shadow-indigo-200 flex items-center gap-3 w-fit"
+                        className="flex w-fit items-center gap-3 rounded-full bg-indigo-600 px-6 py-3 text-white shadow-2xl shadow-indigo-500/20"
                     >
                         <div className="w-2 h-2 bg-white rounded-full animate-ping" />
-                        <span className="text-xs font-black uppercase tracking-widest">AI Expanding Graph...</span>
+                        <span className="text-xs font-semibold uppercase tracking-widest">AI Expanding Graph...</span>
                     </motion.div>
                 )}
             </Panel>
 
             <Panel position="bottom-right" className="m-6 flex flex-col gap-3">
-                <div className="flex flex-col gap-2 bg-white/80 backdrop-blur-xl p-2 rounded-2xl border border-white shadow-2xl">
-                    <Button variant="ghost" size="icon" onClick={() => zoomIn()} className="h-10 w-10 text-gray-600 hover:bg-gray-50">
+                    <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card/90 p-2 backdrop-blur-xl shadow-2xl">
+                      <Button variant="ghost" size="icon" onClick={() => zoomIn()} className="h-10 w-10 text-muted-foreground hover:bg-secondary">
                         <ZoomIn className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => zoomOut()} className="h-10 w-10 text-gray-600 hover:bg-gray-50">
+                      <Button variant="ghost" size="icon" onClick={() => zoomOut()} className="h-10 w-10 text-muted-foreground hover:bg-secondary">
                         <ZoomOut className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => fitView()} className="h-10 w-10 text-gray-600 hover:bg-gray-50">
+                      <Button variant="ghost" size="icon" onClick={() => fitView()} className="h-10 w-10 text-muted-foreground hover:bg-secondary">
                         <Focus className="h-4 w-4" />
                     </Button>
                 </div>
-                <Button onClick={handleExport} className="rounded-2xl bg-black hover:bg-gray-800 text-white font-black text-[10px] uppercase tracking-widest h-12 px-6 shadow-xl">
+                    <Button onClick={handleExport} className="h-12 rounded-2xl bg-primary px-6 text-[10px] font-semibold uppercase tracking-widest text-primary-foreground shadow-xl hover:bg-primary/90">
                     <Download className="h-4 w-4 mr-2" /> Export Graph
                 </Button>
             </Panel>
@@ -389,11 +389,11 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 20 }}
-                        className="w-[320px] bg-white/90 backdrop-blur-2xl border border-white shadow-2xl rounded-[2.5rem] overflow-hidden"
+                        className="w-[320px] overflow-hidden rounded-[2.5rem] border border-border/70 bg-card/95 backdrop-blur-2xl shadow-2xl"
                     >
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="bg-indigo-50 text-indigo-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                            <div className="rounded-full bg-indigo-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-indigo-600">
                                     Node Insights
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -402,33 +402,33 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
                                             variant="ghost" 
                                             size="icon" 
                                             onClick={() => setExplorationMode('free')}
-                                            className="h-8 w-8 rounded-full text-amber-500 hover:bg-amber-50"
+                                            className="h-8 w-8 rounded-full text-amber-500 hover:bg-amber-500/10"
                                             title="Clear Focus"
                                         >
                                             <X className="h-4 w-4" />
                                         </Button>
                                     )}
                                     <Button variant="ghost" size="icon" onClick={() => setActiveNode(null)} className="h-8 w-8 rounded-full">
-                                        <X className="h-4 w-4 text-gray-400" />
+                                        <X className="h-4 w-4 text-muted-foreground" />
                                     </Button>
                                 </div>
                             </div>
-                            <h3 className="text-xl font-black text-gray-900 tracking-tight mb-2 underline decoration-indigo-200 decoration-4 underline-offset-4">{activeNode.data.label}</h3>
-                            <p className="text-sm font-medium text-gray-500 leading-relaxed mb-6">
+                                  <h3 className="mb-2 text-xl font-semibold tracking-tight text-foreground underline decoration-indigo-300/60 decoration-4 underline-offset-4">{activeNode.data.label}</h3>
+                                  <p className="mb-6 text-sm font-medium leading-relaxed text-muted-foreground">
                                 {activeNode.data.details || "This concept represents a core pillar of the video's architectural model. Expand to see sub-topics or ask for a cross-concept synthesis."}
                             </p>
                             
                             <div className="grid grid-cols-2 gap-2">
                                 <Button 
                                     onClick={() => activeNode.data.onAction('explain', activeNode.data.label)}
-                                    className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 font-black text-[10px] uppercase tracking-widest h-10"
+                                    className="h-10 rounded-2xl bg-indigo-600 text-[10px] font-semibold uppercase tracking-widest hover:bg-indigo-700"
                                 >
                                     Explain
                                 </Button>
                                 <Button 
                                     onClick={() => activeNode.data.onAction('expand', activeNode.data.label)}
                                     variant="outline"
-                                    className="rounded-2xl border-indigo-100 text-indigo-600 font-black text-[10px] uppercase tracking-widest h-10"
+                                    className="h-10 rounded-2xl border-indigo-300/40 text-[10px] font-semibold uppercase tracking-widest text-indigo-600"
                                 >
                                     Expand
                                 </Button>
@@ -446,21 +446,21 @@ const MindMapInner = ({ mindMap, onAIAction, onTimestampClick, isGenerating }: M
 const MindMapDetail = (props: MindMapDetailProps) => {
   if (!props.mindMap?.nodes?.length) {
     return (
-        <div className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-50 border border-gray-100 rounded-[3rem] p-12 text-center">
-            <div className="w-24 h-24 rounded-[2.5rem] bg-white shadow-2xl flex items-center justify-center mb-8 relative">
+        <div className="flex h-full min-h-[600px] w-full flex-col items-center justify-center rounded-[3rem] border border-border bg-secondary/30 p-12 text-center">
+          <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[2.5rem] border border-border bg-card shadow-2xl">
                 <Compass className="h-10 w-10 text-indigo-600" />
-                <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-indigo-600 border-4 border-white flex items-center justify-center shadow-lg">
+            <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full border-4 border-card bg-indigo-600 shadow-lg">
                     <Sparkles className="h-3 w-3 text-white" />
                 </div>
             </div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-4">Mastery Map Pending</h2>
-            <p className="max-w-md text-gray-500 font-medium leading-relaxed mb-10">
+          <h2 className="mb-4 text-3xl font-semibold tracking-tight text-foreground">Mastery Map Pending</h2>
+          <p className="mb-10 max-w-md font-medium leading-relaxed text-muted-foreground">
                 Visualize the conceptual DNA of this video. We'll build an interactive knowledge graph showing how every theory and practical step connects.
             </p>
             <Button 
                 onClick={() => props.onAIAction?.('mind_map', 'Generate a comprehensive mind map of this video workflow.')}
                 disabled={props.isGenerating}
-                className="rounded-[2rem] bg-indigo-600 hover:bg-indigo-700 text-white px-12 h-16 font-black text-base shadow-2xl shadow-indigo-100 flex items-center gap-4 transition-all hover:scale-105 active:scale-95"
+            className="flex h-16 items-center gap-4 rounded-[2rem] bg-indigo-600 px-12 text-base font-semibold text-white shadow-2xl shadow-indigo-500/25 transition-all hover:scale-105 hover:bg-indigo-700 active:scale-95"
             >
                 {props.isGenerating ? (
                     <>
@@ -479,7 +479,7 @@ const MindMapDetail = (props: MindMapDetailProps) => {
   }
 
   return (
-    <div className="w-full h-full min-h-[600px] border border-gray-100 rounded-[3rem] overflow-hidden shadow-sm bg-white">
+    <div className="h-full w-full min-h-[600px] overflow-hidden rounded-[3rem] border border-border bg-card shadow-sm">
         <ReactFlowProvider>
             <MindMapInner {...props} />
         </ReactFlowProvider>

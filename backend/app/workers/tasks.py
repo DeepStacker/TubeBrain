@@ -19,7 +19,7 @@ from app.services.ai_pipeline import (
     generate_embeddings,
     synthesize_content,
 )
-from app.services.transcript import TranscriptEngine, extract_metadata
+from app.services.transcript import TranscriptEngine, extract_metadata, TranscriptResult, TranscriptSegment
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -177,9 +177,28 @@ async def process_video_analysis(
                     try:
                         metadata = await extract_metadata(platform_id)
                         video.title = metadata.get("title", video.title)
-                        video.channel = metadata.get("channel")
-                        video.duration_seconds = metadata.get("duration_seconds")
-                        video.thumbnail_url = metadata.get("thumbnail_url")
+                        video.channel = metadata.get("channel", video.channel)
+                        video.duration_seconds = metadata.get("duration_seconds", video.duration_seconds)
+                        video.thumbnail_url = metadata.get("thumbnail_url", video.thumbnail_url)
+                        video.description = metadata.get("description", video.description)
+                        # Store chapters in description if they exist to ensure visibility
+                        # Store chapters in description and PROMPT to Analysis UI
+                        if metadata.get("chapters"):
+                            chapter_str = "\n\n[CHAPTERS]\n" + "\n".join([f"{c['time']} {c['label']}" for c in metadata["chapters"]])
+                            if chapter_str not in (video.description or ""):
+                                video.description = (video.description or "") + chapter_str
+                            
+                            # DIRECT UI PROMOTION to Analysis model
+                            async with async_session_factory() as p_db:
+                                p_analysis = await _get_analysis(p_db, analysis_id)
+                                if p_analysis:
+                                    # Only promote if we actually found metadata chapters
+                                    if metadata.get("chapters"):
+                                        p_analysis.timestamps = metadata["chapters"]
+                                        if not p_analysis.roadmap:
+                                            p_analysis.roadmap = {"chapters": metadata["chapters"]}
+                                    await p_db.commit()
+                        
                         await vid_db.commit()
                         await set_parent_prog(20)
                     except Exception as e:
@@ -218,6 +237,24 @@ async def process_video_analysis(
                         )
                         await set_parent_prog(80)
                     else:
+                        # NEW EXTRACTION PATH
+                        # GLOBAL METADATA SYNC: If title is Unknown, try Lane 3 Recovery immediately
+                        if video.title == "Unknown" or not video.description:
+                            try:
+                                from app.services.transcript import extract_metadata
+                                logger.info(f"[{vid_uuid}] Metadata is missing. Triggering Global Recovery for {platform_id}...")
+                                g_meta = await extract_metadata(platform_id)
+                                if g_meta and g_meta.get('title') != "Unknown":
+                                    video.title = g_meta.get('title', video.title)
+                                    video.description = g_meta.get('description', video.description)
+                                    video.thumbnail_url = g_meta.get('thumbnail_url', video.thumbnail_url)
+                                    video.channel = g_meta.get('channel', video.channel)
+                                    video.duration_seconds = g_meta.get('duration_seconds', video.duration_seconds)
+                                    await vid_db.commit()
+                                    logger.info(f"[{vid_uuid}] Global Metadata Recovery Success: {video.title}")
+                            except Exception as g_e:
+                                logger.warning(f"[{vid_uuid}] Global Metadata Recovery failed: {g_e}")
+
                         async def transcript_progress(stage: int, total: int, msg: str):
                             p = 20 + int((stage / total) * 55)
                             await set_parent_prog(p)
@@ -229,11 +266,67 @@ async def process_video_analysis(
                             )
                             await set_parent_prog(75, "Transcription complete")
                         except Exception as e:
-                            logger.error(f"[{vid_uuid}] Transcription failed: {e}")
-                            video.status = "failed"
-                            video.error_message = str(e)
-                            await vid_db.commit()
-                            return None, None
+                            logger.error(f"[{vid_uuid}] Transcription failed: {e}. Pivoting to Zero-Failure Metadata Fallback...")
+                            await set_parent_prog(65, "Pivoting to Metadata Analysis...")
+                            
+                            # ZERO-FAILURE FALLBACK: Fetch metadata and use as pseudo-transcript
+                            try:
+                                from app.services.transcript import extract_metadata
+                                meta = await extract_metadata(platform_id)
+                                
+                                # Construct pseudo-transcript from metadata
+                                pseudo_text = f"ANALYSIS SOURCE: VIDEO METADATA (Transcription Unavailable)\n\n"
+                                pseudo_text += f"TITLE: {meta.get('title', 'Unknown')}\n\n"
+                                pseudo_text += f"DESCRIPTION:\n{meta.get('description', 'No description available.')}"
+                                
+                                # SYNC TO VIDEO MODEL: Update the main record so UI is correct
+                                video.title = meta.get('title', 'Unknown')
+                                video.description = meta.get('description', '')
+                                video.thumbnail_url = meta.get('thumbnail_url', video.thumbnail_url)
+                                video.duration_seconds = meta.get('duration_seconds', video.duration_seconds)
+                                video.channel = meta.get('channel', video.channel)
+                                await vid_db.commit()
+
+                                # Use official TranscriptResult dataclass for total compatibility
+                                # Map discovered chapters to segments for UI display
+                                segments = []
+                                last_time = 0
+                                meta_chapters = meta.get('chapters', [])
+                                
+                                if meta_chapters:
+                                    for i, ch in enumerate(meta_chapters):
+                                        # Parse "MM:SS" or "HH:MM:SS" to float seconds
+                                        parts = ch['time'].split(':')
+                                        curr_time = 0
+                                        if len(parts) == 3: curr_time = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])
+                                        elif len(parts) == 2: curr_time = int(parts[0])*60 + int(parts[1])
+                                        
+                                        if i > 0 and segments:
+                                            segments[-1].end = float(curr_time)
+                                        
+                                        segments.append(TranscriptSegment(
+                                            start=float(curr_time),
+                                            end=float(curr_time + 60), # Temporary padding
+                                            text=f"Chapter: {ch['label']}"
+                                        ))
+                                
+                                if not segments:
+                                    segments = [TranscriptSegment(start=0, end=float(meta.get('duration_seconds', 60)), text="Video Context (Metadata Analysis)")]
+                                
+                                transcript_result = TranscriptResult(
+                                    full_text=pseudo_text,
+                                    segments=segments,
+                                    language=meta.get('language', 'en'),
+                                    source="metadata_fallback",
+                                    word_count=len(pseudo_text.split())
+                                )
+                                await set_parent_prog(75, "Metadata analysis ready")
+                            except Exception as meta_e:
+                                logger.error(f"[{vid_uuid}] Metadata fallback also failed: {meta_e}")
+                                video.status = "failed"
+                                video.error_message = f"Transcription and Metadata fallback failed: {e}"
+                                await vid_db.commit()
+                                return None, None
 
                         # Store/Update transcript
                         fresh_transcript_result = await vid_db.execute(
@@ -334,16 +427,24 @@ async def process_video_analysis(
                 await db.commit()
                 return
 
-            # AI Synthesis - Fast initial analysis (overview + key_points + timestamps only)
-            logger.info(f"Analysis {analysis_id}: Starting AI synthesis...")
-            analysis.progress_percentage = 75
-            analysis.estimated_remaining_seconds = 15  # AI call typically takes 5-15s
-            await db.commit()
-
+            # AI Synthesis - Fast initial analysis
             combined_transcript = "\n\n---\n\n".join(all_transcripts)
+            word_count = len(combined_transcript.split())
+            
+            # Ultra-Scale logic for 10+ hours (approx > 50k words)
+            is_ultra_scale = word_count > 50000
+            
+            logger.info(f"Analysis {analysis_id}: Starting AI synthesis ({word_count} words, UltraScale={is_ultra_scale})...")
+            analysis.progress_percentage = 70
+            # Rough estimate: 12s base + 6s per 5000 words (optimized for Groq speed)
+            est_seconds = 12 + int(word_count / 800)
+            analysis.estimated_remaining_seconds = est_seconds
+            await db.commit()
             
             try:
-                ai_result = await synthesize_content(
+                # Use a tighter timeout for synthesis of standard videos
+                async with asyncio.timeout(90.0 if not is_ultra_scale else 300.0):
+                    ai_result = await synthesize_content(
                     transcript_text=combined_transcript,
                     metadata=primary_metadata,
                     expertise=expertise,
@@ -462,7 +563,10 @@ async def process_upload(
             await update_prog(100)
 
             # AI Synthesis
-            analysis.progress_percentage = 80
+            word_count = transcript_result.word_count
+            analysis.progress_percentage = 70
+            est_seconds = 20 + int(word_count / 625)
+            analysis.estimated_remaining_seconds = est_seconds
             await db.commit()
 
             ai_result = await synthesize_content(

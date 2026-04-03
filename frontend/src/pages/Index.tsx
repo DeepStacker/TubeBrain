@@ -95,11 +95,16 @@ import { extractVideoId, POLL_INTERVAL_MS, POLL_MAX_ATTEMPTS, MAX_RECENTS_SHOWN,
 import { logger } from "@/lib/logger";
 
 const Index = () => {
-  const [activeView, setActiveView] = useState<"dashboard" | "analysis" | "history" | "library" | "space" | "settings">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "analysis" | "history" | "library" | "space" | "settings">(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_VIEW);
+    return (saved as any) || "dashboard";
+  });
   const [expertise, setExpertise] = useState<"Beginner" | "Intermediate" | "Expert">("Intermediate");
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === "true";
+  });
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // ... existing states
@@ -123,7 +128,9 @@ const Index = () => {
   const [feedbackText, setFeedbackText] = useState("");
   const [isProfileUpdateOpen, setIsProfileUpdateOpen] = useState(false);
   const [newName, setNewName] = useState("");
-  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(() => {
+    return localStorage.getItem(STORAGE_KEYS.ACTIVE_ANALYSIS_ID);
+  });
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -252,6 +259,69 @@ const Index = () => {
     document.addEventListener("mouseup", handleSelection);
     return () => document.removeEventListener("mouseup", handleSelection);
   }, [isChatOpen]);
+ 
+  // Persist View and Analysis State
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_VIEW, activeView);
+  }, [activeView]);
+ 
+  useEffect(() => {
+    if (activeAnalysisId) {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_ANALYSIS_ID, activeAnalysisId);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_ANALYSIS_ID);
+    }
+  }, [activeAnalysisId]);
+ 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_COLLAPSED, String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
+ 
+  // Restore Analysis on Mount
+  useEffect(() => {
+    const restoreAnalysis = async () => {
+      if (activeAnalysisId && !summaryData) {
+        try {
+          const res = await analysisApi.get(activeAnalysisId);
+          if (res.ok) {
+            const data = await res.json();
+            const { analysis, video, transcript_text, transcript_segments } = data;
+            
+            setVideoData({
+              title: video.title,
+              channel: video.channel,
+              duration: String(video.duration_seconds),
+              views: video.view_count?.toLocaleString() || "N/A",
+              likes: video.like_count?.toLocaleString() || "N/A",
+              published: video.created_at
+            });
+            setVideoIds([video.platform_id]);
+            setTranscript(transcript_text);
+
+            if (analysis.status === "completed") {
+              setSummaryData(analysis);
+              setAnalysisStatus("completed");
+              setAnalysisProgress(100);
+            } else if (analysis.status === "pending" || analysis.status === "processing") {
+              // Resuming polling
+              setAnalysisStatus("pending");
+              setAnalysisProgress(analysis.progress_percentage || 0);
+              setStatusMessage(analysis.status_message || "Resuming analysis...");
+              pollAnalysis(activeAnalysisId, [video.platform_id]);
+            }
+          } else {
+            // If invalid ID, reset
+            setActiveAnalysisId(null);
+            localStorage.removeItem(STORAGE_KEYS.ACTIVE_ANALYSIS_ID);
+          }
+        } catch (err) {
+          logger.error("Failed to restore analysis:", err);
+          setActiveAnalysisId(null);
+        }
+      }
+    };
+    restoreAnalysis();
+  }, []);
 
   // YouTube Progress Tracking
   useEffect(() => {
@@ -320,6 +390,28 @@ const Index = () => {
     // Scroll to top on view change
     document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [activeView]);
+
+  // Sync activeView with location for external changes (e.g. sidebar clicks)
+  useEffect(() => {
+    const path = location.pathname;
+    const viewMap: Record<string, any> = {
+      "/dashboard": "dashboard",
+      "/history": "history", 
+      "/library": "library",
+      "/settings": "settings",
+      "/analysis": "analysis"
+    };
+
+    if (path.startsWith("/space/")) {
+      setActiveView("space");
+      // Find space by ID if needed
+      const spaceId = path.split("/").pop();
+      const space = spaces.find(s => s.id === spaceId);
+      if (space) setSelectedSpace(space);
+    } else if (viewMap[path]) {
+      setActiveView(viewMap[path]);
+    }
+  }, [location.pathname, spaces]);
 
   const handlePayment = async (plan: string) => {
     try {
@@ -1873,14 +1965,14 @@ const Index = () => {
 
               {!getAuthToken() ? (
                 <div className="text-center py-24">
-                  <div className="w-16 h-16 bg-secondary rounded-3xl flex items-center justify-center mx-auto mb-6 border border-border shadow-sm">
+                  <div className="w-16 h-16 bg-secondary rounded-[28px] flex items-center justify-center mx-auto mb-6 border border-border shadow-sm">
                     <UserIcon className="h-7 w-7 text-muted-foreground/30" />
                   </div>
                   <h3 className="text-lg font-bold text-foreground mb-1">Sign in to continue</h3>
                   <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
                     Log in to access your saved history, library, and learning spaces.
                   </p>
-                  <Button onClick={() => setActiveView("dashboard")} className="rounded-xl font-semibold text-sm h-10 px-6">Back to Search</Button>
+                  <Button onClick={() => setActiveView("dashboard")} className="rounded-2xl font-bold text-sm h-11 px-8 bg-primary text-primary-foreground shadow-lg shadow-primary/20">Go to Dashboard</Button>
                 </div>
               ) : ((activeView === "history" && historyItems.length > 0) || 
                 (activeView === "library" && historyItems.some(h => spaces.some(s => s.videoIds.includes(h.videoIds[0])))) || 
@@ -1939,13 +2031,13 @@ const Index = () => {
                 </div>
               ) : (
                 <div className="text-center py-24">
-                  <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-gray-100">
+                  <div className="w-16 h-16 bg-secondary/50 rounded-[28px] flex items-center justify-center mx-auto mb-6 border border-border/50">
                     {activeView === "history" ? (
-                      <HistoryIcon className="h-7 w-7 text-gray-200" />
+                      <HistoryIcon className="h-7 w-7 text-muted-foreground/20" />
                     ) : activeView === "library" ? (
-                      <LibraryIcon className="h-7 w-7 text-gray-200" />
+                      <LibraryIcon className="h-7 w-7 text-muted-foreground/20" />
                     ) : (
-                      <FolderOpen className="h-7 w-7 text-gray-200" />
+                      <FolderOpen className="h-7 w-7 text-muted-foreground/20" />
                     )}
                   </div>
                   <h3 className="text-lg font-bold text-foreground mb-1">
@@ -1960,7 +2052,7 @@ const Index = () => {
                   </p>
                   <Button 
                     onClick={() => setActiveView("dashboard")} 
-                    className="rounded-xl font-semibold text-sm h-10 px-6 bg-black text-white hover:bg-gray-900"
+                    className="rounded-2xl font-bold text-sm h-11 px-8 bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                   >
                     Start Learning
                   </Button>
@@ -2029,6 +2121,7 @@ const Index = () => {
                 }} 
                 analysisStyle={analysisStyle}
                 onStyleChange={setAnalysisStyle}
+                expertise={expertise}
               />
               
               <div className="max-w-5xl mx-auto px-6 mt-20 space-y-20">

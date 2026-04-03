@@ -38,9 +38,9 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex items-center justify-center min-h-screen bg-white px-6 animate-in fade-in duration-500">
+        <div className="flex min-h-screen items-center justify-center bg-background px-6 animate-in fade-in duration-500">
           <div className="text-center max-w-md">
-            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-100">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-200/70 bg-red-500/10">
               <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
@@ -52,19 +52,19 @@ class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => window.location.reload()}
-                className="px-6 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-900 transition-colors"
+                className="rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 Refresh Page
               </button>
               <button
                 onClick={this.handleReset}
-                className="px-6 py-2.5 border border-gray-200 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                className="rounded-xl border border-border px-6 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
               >
                 Try Again
               </button>
             </div>
             {!import.meta.env.PROD && this.state.error && (
-              <details className="mt-6 text-left bg-gray-50 rounded-xl p-4 text-xs text-muted-foreground border border-gray-100">
+              <details className="mt-6 rounded-xl border border-border bg-secondary/40 p-4 text-left text-xs text-muted-foreground">
                 <summary className="cursor-pointer font-medium mb-2">Error Details</summary>
                 <pre className="whitespace-pre-wrap break-words">{this.state.error.message}</pre>
               </details>

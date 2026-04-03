@@ -181,11 +181,11 @@ const Flashcards = ({
     >
       <div className="w-full space-y-4 mb-6">
          {/* Study Mode Toggles */}
-         <div className="flex bg-secondary p-1 rounded-2xl border border-border">
+         <div className="flex bg-secondary p-1 rounded-2xl border border-border/70">
             <button 
               onClick={() => setStudyMode('fast')}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-bold transition-all",
+                "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-medium transition-all",
                 studyMode === 'fast' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -194,7 +194,7 @@ const Flashcards = ({
             <button 
               onClick={() => setStudyMode('spaced')}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-bold transition-all",
+                "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-medium transition-all",
                 studyMode === 'spaced' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -205,10 +205,10 @@ const Flashcards = ({
          <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-3">
                <div className="w-8 h-8 rounded-full border-4 border-primary border-r-transparent flex items-center justify-center">
-                  <span className="text-[10px] font-black">{Math.round((mastered.length / cards.length) * 100)}%</span>
+                   <span className="text-[10px] font-semibold">{Math.round((mastered.length / cards.length) * 100)}%</span>
                </div>
                 <div>
-                   <h3 className="text-sm font-bold">Study Progress</h3>
+                   <h3 className="text-sm font-semibold">Study Progress</h3>
                    <div className="flex items-center gap-1.5 overflow-hidden">
                       <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter shrink-0">{cards.length} Total Cards</p>
                       <AnimatePresence>
@@ -217,7 +217,7 @@ const Flashcards = ({
                             initial={{ x: -10, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             exit={{ x: 10, opacity: 0 }}
-                            className="text-[8px] font-black bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md uppercase shrink-0 whitespace-nowrap"
+                            className="text-[8px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md uppercase shrink-0 whitespace-nowrap"
                           >
                             +{cards.length - (lastCount - (showAdditionBadge ? 0 : 0))} New Added
                           </motion.span>
@@ -231,8 +231,8 @@ const Flashcards = ({
                 variant="ghost" 
                 size="sm" 
                 onClick={() => setShowShortcuts(!showShortcuts)}
-                className={cn(
-                  "h-8 px-2 rounded-lg bg-secondary border border-border transition-colors",
+                  className={cn(
+                  "h-8 px-2 rounded-lg bg-secondary border border-border/70 transition-colors",
                   showShortcuts && "bg-primary text-primary-foreground"
                 )}
                >
@@ -245,7 +245,7 @@ const Flashcards = ({
                   setIsEditing(true);
                   setEditData({ front: currentCard.front, back: currentCard.back });
                 }}
-                className="h-8 w-8 p-0 rounded-lg bg-secondary border border-border"
+                className="h-8 w-8 p-0 rounded-lg bg-secondary border border-border/70"
                >
                  <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
                </Button>
@@ -253,7 +253,7 @@ const Flashcards = ({
                   variant="ghost" 
                   size="sm" 
                   onClick={() => {setCurrentIndex(0); setIsFlipped(false); setMastered([]);}}
-                  className="h-8 w-8 p-0 rounded-lg bg-secondary border border-border"
+                  className="h-8 w-8 p-0 rounded-lg bg-secondary border border-border/70"
                >
                   <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
                </Button>
@@ -262,7 +262,7 @@ const Flashcards = ({
                   size="sm" 
                   disabled={isGenerating}
                   onClick={(e) => { e.stopPropagation(); onGenerateMore?.(); }}
-                  className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold gap-1.5"
+                  className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-[10px] font-medium gap-1.5"
                >
                   {isGenerating ? (
                     <div className="w-2.5 h-2.5 border border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
@@ -284,7 +284,7 @@ const Flashcards = ({
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="p-4 bg-muted rounded-[2rem] border border-border grid grid-cols-2 gap-x-6 gap-y-2">
+                    <div className="p-4 bg-muted rounded-[24px] border border-border/70 grid grid-cols-2 gap-x-6 gap-y-2">
                       {[
                         { k: "← / A / [", l: "Previous" },
                         { k: "→ / D / ]", l: "Next" },
@@ -305,7 +305,7 @@ const Flashcards = ({
                   </motion.div>
                 </AnimatePresence>
               ) : (
-                <div className="p-4 bg-black rounded-[2rem] border border-white/10 grid grid-cols-2 gap-x-6 gap-y-2">
+                <div className="p-4 bg-black rounded-[24px] border border-white/10 grid grid-cols-2 gap-x-6 gap-y-2">
                   {[
                     { k: "← / A / [", l: "Previous" },
                     { k: "→ / D / ]", l: "Next" },
@@ -332,24 +332,24 @@ const Flashcards = ({
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full bg-card border border-border rounded-[3rem] p-10 text-center space-y-8 shadow-2xl shadow-foreground/5"
+          className="w-full bg-card border border-border/70 rounded-[28px] p-10 text-center space-y-8 shadow-sm"
         >
-          <div className="w-24 h-24 rounded-[2.5rem] bg-primary mx-auto flex items-center justify-center shadow-2xl shadow-primary/20">
+          <div className="w-24 h-24 rounded-[28px] bg-primary mx-auto flex items-center justify-center shadow-sm">
             <Trophy className="h-10 w-10 text-primary-foreground" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-2xl font-black tracking-tight">Deck Mastery!</h3>
-            <p className="text-sm font-bold text-muted-foreground">You've reached the end of this study set.</p>
+            <h3 className="text-2xl font-semibold tracking-tight">Deck Mastery!</h3>
+            <p className="text-sm text-muted-foreground">You've reached the end of this study set.</p>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-6 rounded-[2rem] bg-secondary border border-border">
-               <span className="text-2xl font-black text-foreground">{mastered.length}</span>
-               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">Mastered</p>
+            <div className="p-6 rounded-[24px] bg-secondary border border-border/70">
+              <span className="text-2xl font-semibold text-foreground">{mastered.length}</span>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mt-1">Mastered</p>
             </div>
-            <div className="p-6 rounded-[2rem] bg-secondary border border-border">
-               <span className="text-2xl font-black text-foreground">{cards.length - mastered.length}</span>
-               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">To Review</p>
+            <div className="p-6 rounded-[24px] bg-secondary border border-border/70">
+              <span className="text-2xl font-semibold text-foreground">{cards.length - mastered.length}</span>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mt-1">To Review</p>
             </div>
           </div>
 
@@ -360,7 +360,7 @@ const Flashcards = ({
                  setIsFinished(false);
                  setMastered([]);
                }}
-               className="h-14 rounded-2xl bg-primary text-primary-foreground font-bold gap-2"
+               className="h-14 rounded-2xl bg-primary text-primary-foreground font-medium gap-2"
              >
                <RotateCcw className="h-4 w-4" /> Restart Deck
              </Button>
@@ -368,7 +368,7 @@ const Flashcards = ({
                variant="outline"
                disabled={isGenerating}
                onClick={onGenerateMore}
-               className="h-14 rounded-2xl border-border font-bold gap-2 hover:bg-secondary transition-all"
+               className="h-14 rounded-2xl border-border/70 font-medium gap-2 hover:bg-secondary transition-all"
              >
                {isGenerating ? (
                  <div className="w-4 h-4 border-2 border-muted border-t-primary animate-spin rounded-full" />
@@ -399,10 +399,10 @@ const Flashcards = ({
               >
                 {/* Front */}
                 <div className={cn(
-                  "absolute inset-0 w-full h-full backface-hidden p-8 flex flex-col items-center justify-center border-2 rounded-[3.5rem] shadow-2xl transition-all duration-500",
+                  "absolute inset-0 w-full h-full backface-hidden p-8 flex flex-col items-center justify-center border rounded-[28px] shadow-sm transition-all duration-500",
                   mastered.includes(currentIndex) 
                     ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800" 
-                    : "bg-card border-border hover:border-primary/20"
+                    : "bg-card border-border/70 hover:border-border"
                 )}>
                   <div className="absolute top-8 left-8 flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Question</span>
@@ -436,7 +436,7 @@ const Flashcards = ({
                            e.stopPropagation();
                            setShowHint(currentIndex);
                          }}
-                         className="flex items-center gap-1.5 px-3 py-1 bg-secondary hover:bg-accent border border-border rounded-full transition-all mt-2"
+                         className="flex items-center gap-1.5 px-3 py-1 bg-secondary hover:bg-accent border border-border/70 rounded-full transition-all mt-2"
                       >
                          <Zap className="h-2.5 w-2.5 text-amber-500" />
                          <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Get Hint</span>
@@ -446,7 +446,7 @@ const Flashcards = ({
                 </div>
 
                 {/* Back */}
-                <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 p-8 flex flex-col bg-black text-white rounded-[3.5rem] shadow-3xl overflow-hidden group/back">
+                <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 p-8 flex flex-col bg-black text-white rounded-[28px] shadow-xl overflow-hidden group/back">
                    <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-black opacity-50" />
                    
                    <div className="relative z-10 flex-1 flex flex-col h-full">

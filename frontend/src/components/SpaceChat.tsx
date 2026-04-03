@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { 
   Send, 
   Bot, 
@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { RichMessage } from "./RichMessage";
+import { toast } from "sonner";
 
 interface Message {
   role: "user" | "assistant";
@@ -22,18 +23,64 @@ interface SpaceChatProps {
   spaceId: string;
   onSendChat: (spaceId: string, message: string, onChunk: (chunk: string) => void) => Promise<void>;
   initialMessages?: Message[];
+  spaceName?: string;
 }
 
+const EMPTY_MESSAGES: Message[] = [];
 
-export default function SpaceChat({ spaceId, onSendChat, initialMessages = [] }: SpaceChatProps) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [input, setInput] = useState("");
+const loadDraft = (spaceId: string) => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    return window.localStorage.getItem(`youtube-genius:space-chat-draft:${spaceId}`) || "";
+  } catch {
+    return "";
+  }
+};
+
+const saveDraft = (spaceId: string, value: string) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (value) {
+      window.localStorage.setItem(`youtube-genius:space-chat-draft:${spaceId}`, value);
+    } else {
+      window.localStorage.removeItem(`youtube-genius:space-chat-draft:${spaceId}`);
+    }
+  } catch {
+    // Draft persistence is optional.
+  }
+};
+
+
+export default function SpaceChat({ spaceId, onSendChat, initialMessages, spaceName }: SpaceChatProps) {
+  const [messages, setMessages] = useState<Message[]>(() => initialMessages ?? EMPTY_MESSAGES);
+  const [input, setInput] = useState(() => loadDraft(spaceId));
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const suggestions = useMemo(() => ([
+    "Summarize everything in this space",
+    "What are the common themes?",
+    "Help me study for an exam",
+  ]), []);
+
+  useEffect(() => {
+    if (initialMessages) {
+      setMessages(initialMessages);
+    }
+  }, [initialMessages]);
+
+  useEffect(() => {
+    saveDraft(spaceId, input);
+  }, [input, spaceId]);
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [messages, isLoading]);
 
@@ -47,70 +94,69 @@ export default function SpaceChat({ spaceId, onSendChat, initialMessages = [] }:
 
     try {
       let currentResponse = "";
+      const placeholderIndex = messages.length + 1;
       setMessages(prev => [...prev, { role: "assistant", content: "" }]);
       
       await onSendChat(spaceId, userMsg.content, (chunk) => {
         currentResponse += chunk;
         setMessages(prev => {
           const newMessages = [...prev];
-          newMessages[newMessages.length - 1].content = currentResponse;
+          if (newMessages[placeholderIndex]) {
+            newMessages[placeholderIndex].content = currentResponse;
+          }
           return newMessages;
         });
       });
     } catch (err) {
       console.error("Space chat error:", err);
+      setMessages(prev => prev.filter((message, index) => index !== prev.length - 1 || message.content.length > 0));
+      toast.error("Space chat could not respond right now.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-3xl border border-border shadow-sm overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-border/70 bg-card shadow-lg shadow-foreground/5">
       {/* Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between bg-card/70 backdrop-blur-xl">
+      <div className="flex items-center justify-between border-b border-border/70 bg-background/80 p-4 backdrop-blur-xl">
         <div className="flex items-center gap-3">
-           <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
-           </div>
-           <div>
-              <p className="text-xs font-bold text-foreground font-display">Space Genius</p>
-              <div className="flex items-center gap-1.5">
-                <div className={cn("w-1.5 h-1.5 rounded-full", isLoading ? "bg-green-500 animate-pulse" : "bg-muted")} />
-                <p className="text-[10px] font-medium text-muted-foreground">{isLoading ? "Synthesizing..." : "Context set"}</p>
-              </div>
-           </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
+            <Sparkles className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-foreground font-display">{spaceName || "Space Genius"}</p>
+            <div className="flex items-center gap-2">
+              <div className={cn("h-1.5 w-1.5 rounded-full", isLoading ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/40")} />
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em]">{isLoading ? "Synthesizing" : `${messages.length} messages`}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-6" ref={scrollRef}>
+      <div className="flex-1 space-y-5 overflow-y-auto p-4 scrollbar-thin" ref={scrollRef}>
         {messages.length === 0 && (
-          <div className="text-center py-24 px-6">
-             <div className="w-16 h-16 bg-secondary/50 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 border border-border">
-                <MessageSquare className="h-7 w-7 text-muted-foreground/30" />
-             </div>
-             <h3 className="text-md font-bold text-foreground font-display">Ask your Space</h3>
-             <p className="text-xs font-medium text-muted-foreground mt-2 leading-relaxed opacity-70">
-                I can answer questions based on all videos, documents, and notes in this space.
-             </p>
-             <div className="mt-8 space-y-2">
-               {[
-                 "Summarize everything in this space",
-                 "What are the common themes?",
-                 "Help me study for an exam"
-               ].map((prompt) => (
-                 <Button 
-                   key={prompt}
-                   variant="outline" 
-                   size="sm" 
-                   className="rounded-2xl text-[10px] font-medium gap-2 border-border hover:bg-secondary text-muted-foreground w-full py-5 justify-start text-left"
-                   onClick={() => { setInput(prompt); }}
-                 >
-                   <ChevronRight className="h-3 w-3 text-muted-foreground/30" />
-                   {prompt}
-                 </Button>
-               ))}
-             </div>
+          <div className="mx-auto flex max-w-[22rem] flex-col items-center px-4 py-16 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[2rem] border border-border/70 bg-secondary/40 shadow-inner">
+              <MessageSquare className="h-7 w-7 text-muted-foreground/30" />
+            </div>
+            <h3 className="mt-6 text-lg font-bold text-foreground font-display">Ask your space</h3>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">I can answer questions using the videos, documents, and notes you’ve added here.</p>
+            <div className="mt-8 w-full space-y-2">
+              {suggestions.map((prompt) => (
+                <Button
+                  key={prompt}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-3 rounded-2xl border-border/70 bg-background/60 px-4 py-5 text-left text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  onClick={() => setInput(prompt)}
+                >
+                  <ChevronRight className="h-3.5 w-3.5 text-primary/60" />
+                  <span className="leading-5">{prompt}</span>
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -119,19 +165,19 @@ export default function SpaceChat({ spaceId, onSendChat, initialMessages = [] }:
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             key={i}
-            className={cn("flex gap-4", msg.role === "user" ? "flex-row-reverse" : "justify-start")}
+            className={cn("flex gap-3", msg.role === "user" ? "flex-row-reverse" : "justify-start")}
           >
             <div className={cn(
-              "w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm transition-all",
-              msg.role === "assistant" ? "bg-primary border-primary shadow-primary/20" : "bg-background border-border"
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border shadow-sm transition-all",
+              msg.role === "assistant" ? "border-primary/10 bg-primary shadow-primary/20" : "border-border/70 bg-background"
             )}>
-              {msg.role === "assistant" ? <Bot className="h-5 w-5 text-primary-foreground" /> : <User className="h-5 w-5 text-muted-foreground" />}
+              {msg.role === "assistant" ? <Bot className="h-4.5 w-4.5 text-primary-foreground" /> : <User className="h-4.5 w-4.5 text-muted-foreground" />}
             </div>
             <div className={cn(
-              "max-w-[85%] p-4 rounded-[1.75rem] text-xs leading-relaxed transition-all",
+              "max-w-[85%] rounded-[1.5rem] px-4 py-3 text-sm leading-6 transition-all",
               msg.role === "assistant" 
-                ? "bg-secondary/50 border border-border text-foreground font-medium rounded-tl-none shadow-sm" 
-                : "bg-primary text-primary-foreground font-bold rounded-tr-none shadow-lg shadow-primary/10"
+                ? "rounded-tl-none border border-border/60 bg-background/80 text-foreground shadow-sm" 
+                : "rounded-tr-none bg-primary text-primary-foreground shadow-lg shadow-primary/10"
             )}>
               {msg.role === "assistant" ? <RichMessage content={msg.content} role="assistant" /> : <p>{msg.content}</p>}
             </div>
@@ -139,20 +185,20 @@ export default function SpaceChat({ spaceId, onSendChat, initialMessages = [] }:
         ))}
 
         {isLoading && !messages[messages.length - 1]?.content && (
-          <div className="flex gap-4">
-            <div className="w-9 h-9 rounded-2xl bg-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
-              <Bot className="h-5 w-5 text-primary-foreground" />
+          <div className="flex gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
+              <Bot className="h-4.5 w-4.5 text-primary-foreground" />
             </div>
-            <div className="bg-secondary/50 border border-border p-4 rounded-[1.75rem] rounded-tl-none shadow-sm flex items-center gap-2">
-               <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-               <span className="text-[10px] text-muted-foreground font-medium animate-pulse">Thinking...</span>
+            <div className="flex items-center gap-2 rounded-[1.5rem] rounded-tl-none border border-border/60 bg-background/80 px-4 py-3 shadow-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Thinking</span>
             </div>
           </div>
         )}
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-background border-t border-border">
+      <div className="border-t border-border/70 bg-background/85 p-4 backdrop-blur-xl">
         <div className="relative group">
           <textarea
             value={input}
@@ -160,16 +206,16 @@ export default function SpaceChat({ spaceId, onSendChat, initialMessages = [] }:
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                void handleSend();
               }
             }}
             placeholder="Search across all materials..."
-            className="w-full bg-secondary/50 border border-transparent group-focus-within:border-border group-focus-within:bg-background rounded-[1.5rem] p-4 text-xs font-semibold focus:ring-4 focus:ring-primary/5 min-h-[60px] max-h-[160px] resize-none pr-12 transition-all outline-none"
+            className="min-h-[68px] max-h-[160px] w-full resize-none rounded-[1.5rem] border border-border/70 bg-background p-4 pr-12 text-sm leading-6 text-foreground outline-none transition-all placeholder:text-muted-foreground/45 focus:border-primary/30 focus:ring-4 focus:ring-primary/5"
           />
           <button
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             disabled={!input.trim() || isLoading}
-            className="absolute right-3 bottom-3 p-2.5 bg-primary text-primary-foreground rounded-[1rem] shadow-lg shadow-primary/20 hover:scale-110 active:scale-95 transition-all disabled:opacity-20 disabled:scale-100"
+            className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-[1rem] bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:scale-100"
           >
             <Send className="h-4 w-4" />
           </button>

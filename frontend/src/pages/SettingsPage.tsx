@@ -52,21 +52,22 @@ export default function SettingsPage() {
   if (!user) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-500">Please sign in to access settings.</p>
+        <p className="text-muted-foreground">Please sign in to access settings.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto py-12 px-6 w-full">
-      <div className="flex flex-col lg:flex-row gap-12 bg-card rounded-[40px] border border-border shadow-2xl overflow-hidden min-h-[700px]">
+    <div className="mx-auto w-full max-w-6xl px-6 py-10">
+      <div className="overflow-hidden rounded-[32px] border border-border/70 bg-card shadow-xl">
+        <div className="grid min-h-[700px] grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
-        <div className="w-full lg:w-72 border-r border-border p-8 flex flex-col gap-10">
+        <div className="flex flex-col gap-8 border-b border-border/70 bg-background/40 p-7 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary">
               <SettingsIcon className="h-6 w-6 text-primary-foreground" />
             </div>
-            <h2 className="text-2xl font-black">Settings</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
           </div>
           
           <nav className="flex flex-col gap-2">
@@ -79,10 +80,10 @@ export default function SettingsPage() {
                 key={tab.id}
                 onClick={() => setSettingsTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-3 px-5 py-4 rounded-2xl text-sm font-bold transition-all",
+                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
                   settingsTab === tab.id 
-                    ? "bg-primary text-primary-foreground shadow-xl shadow-primary/10 scale-[1.02]" 
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    ? "bg-primary text-primary-foreground" 
+                    : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
                 )}
               >
                 <tab.icon className="h-4 w-4" />
@@ -91,10 +92,10 @@ export default function SettingsPage() {
             ))}
           </nav>
 
-          <div className="mt-auto pt-8 border-t border-border">
+          <div className="mt-auto border-t border-border pt-6">
             <button 
               onClick={handleLogout}
-              className="flex items-center gap-3 px-5 py-4 rounded-2xl text-sm font-bold text-red-500 hover:bg-red-500/10 transition-all w-full text-left"
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10"
             >
               <LogOut className="h-4 w-4" />
               Sign Out
@@ -103,7 +104,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 p-10 lg:p-16 overflow-y-auto">
+        <div className="overflow-y-auto p-7 lg:p-10">
           <AnimatePresence mode="wait">
             {settingsTab === 'profile' && (
               <motion.div
@@ -111,76 +112,77 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-12"
+                className="space-y-8"
               >
-                <div className="flex items-center gap-8">
-                  <Avatar className="h-28 w-28 rounded-[36px] border-4 border-background shadow-2xl">
+                <div className="flex flex-col gap-6 rounded-[24px] border border-border/70 bg-background/60 p-6 md:flex-row md:items-center">
+                  <Avatar className="h-20 w-20 rounded-[24px] border border-border/70">
                     <AvatarImage src={user.avatar_url} />
-                    <AvatarFallback className="bg-primary text-primary-foreground text-4xl font-black">
+                    <AvatarFallback className="bg-primary text-3xl font-black text-primary-foreground">
                       {user.name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <h3 className="text-3xl font-black text-foreground">{user.name}</h3>
-                    <p className="text-base font-medium text-muted-foreground">{user.email}</p>
-                    <div className="mt-4 flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-600 w-fit">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">{user.name}</h3>
+                    <p className="text-base text-muted-foreground">{user.email}</p>
+                    <div className="mt-4 flex w-fit items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-emerald-600">
                        <Shield className="h-3.5 w-3.5" />
-                       <span className="text-[10px] font-black uppercase tracking-widest">Verified Learner</span>
+                       <span className="text-[10px] font-semibold uppercase tracking-widest">Verified Learner</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Full Name</label>
+                    <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground ml-1">Full Name</label>
                     <Input 
                       value={newName} 
                       onChange={(e) => setNewName(e.target.value)}
                       placeholder="Your Name"
-                      className="h-16 rounded-2xl border-border px-6 font-bold focus:ring-primary bg-background text-lg" 
+                      className="h-14 rounded-2xl border-border/70 px-6 font-medium focus:ring-primary bg-background text-base" 
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Email Address</label>
+                    <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground ml-1">Email Address</label>
                     <Input 
                       value={user.email} 
                       disabled
-                      className="h-16 rounded-2xl border-border px-6 font-bold bg-secondary text-muted-foreground text-lg cursor-not-allowed" 
+                      className="h-14 rounded-2xl border-border/70 px-6 font-medium bg-secondary text-muted-foreground text-base cursor-not-allowed" 
                     />
                   </div>
                 </div>
 
-                <div className="space-y-10">
+                <div className="space-y-7">
                   <div className="space-y-5">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">Cognitive Expertise</label>
+                    <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground ml-1">Cognitive Expertise</label>
                     <div className="flex gap-4">
                       {['Beginner', 'Intermediate', 'Expert'].map((level) => (
                         <button
                           key={level}
                           onClick={() => setExpertise(level as any)}
                           className={cn(
-                            "flex-1 px-4 py-5 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all border-2",
+                            "flex-1 rounded-2xl border px-4 py-3.5 text-xs font-semibold uppercase tracking-widest transition-colors",
                             expertise === level 
-                              ? "bg-primary text-primary-foreground border-primary shadow-2xl shadow-primary/20" 
-                              : "bg-background text-muted-foreground border-border hover:border-muted-foreground/30"
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm" 
+                              : "bg-background text-muted-foreground border-border/70 hover:border-muted-foreground/30"
                           )}
                         >
                           {level}
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-muted-foreground font-medium ml-1">Adjusts the depth of synthesis and study tools generated for your videos.</p>
+                    <p className="text-xs text-muted-foreground ml-1">Adjusts the depth of synthesis and study tools generated for your videos.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
+                  <div className="grid grid-cols-1 gap-7 pt-2 md:grid-cols-2">
                     <div className="space-y-5">
-                      <div className="flex gap-2 p-1 bg-secondary rounded-2xl border border-border">
+                      <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground ml-1">Appearance</label>
+                      <div className="flex gap-2 p-1 bg-secondary rounded-2xl border border-border/70">
                         {['light', 'dark', 'system'].map((t) => (
                           <button
                             key={t}
                             onClick={() => setTheme(t as any)}
                             className={cn(
-                              "flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                              "flex-1 rounded-xl px-2 py-2.5 text-[10px] font-semibold uppercase tracking-widest transition-colors",
                               theme === t 
                                 ? "bg-background text-foreground shadow-sm" 
                                 : "text-muted-foreground hover:text-foreground"
@@ -193,7 +195,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-5">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">Accessibility</label>
+                      <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground ml-1">Accessibility</label>
                       <div className="flex flex-col gap-3">
                         {[
                           { id: 'highContrast', label: 'High Contrast', key: 'hc' },
@@ -204,13 +206,13 @@ export default function SettingsPage() {
                             key={feature.id}
                             onClick={() => updateAccessibility(feature.id as any, !accessibility[feature.id as keyof typeof accessibility])}
                             className={cn(
-                              "flex items-center justify-between px-5 py-3 rounded-2xl border-2 transition-all",
+                              "flex items-center justify-between px-5 py-3 rounded-2xl border transition-colors",
                               accessibility[feature.id as keyof typeof accessibility]
                                 ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background text-muted-foreground border-border hover:border-muted-foreground/30"
+                                : "bg-background text-muted-foreground border-border/70 hover:border-muted-foreground/30"
                             )}
                           >
-                            <span className="text-[10px] font-black uppercase tracking-widest">{feature.label}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-widest">{feature.label}</span>
                             <div className={cn(
                               "w-8 h-4 rounded-full relative transition-colors",
                               accessibility[feature.id as keyof typeof accessibility] ? "bg-primary-foreground" : "bg-muted"
@@ -227,11 +229,11 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="pt-8 flex gap-4">
+                <div className="pt-4 flex gap-4">
                   <Button 
                     onClick={onUpdateProfile}
                     disabled={isAuthLoading || newName === user.name}
-                    className="h-14 px-12 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xl shadow-primary/20 font-black uppercase tracking-widest text-sm"
+                    className="h-14 px-12 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm font-semibold uppercase tracking-widest text-sm"
                   >
                     Save Profile Changes
                   </Button>
@@ -245,61 +247,60 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-12"
+                className="space-y-8"
               >
-                <div className="bg-primary text-primary-foreground p-12 rounded-[48px] shadow-2xl shadow-primary/10 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-primary-foreground/10 rounded-full blur-[100px] group-hover:bg-primary-foreground/20 transition-all duration-700" />
+                <div className="relative overflow-hidden rounded-[28px] bg-primary p-8 text-primary-foreground shadow-sm">
                   <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-6">
+                    <div className="mb-5 flex items-center gap-2">
                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary-foreground/50">Account Balance</span>
+                       <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary-foreground/60">Account Balance</span>
                     </div>
-                    <div className="flex items-end gap-4">
-                      <Coins className="h-14 w-14 text-amber-400 fill-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]" />
-                      <h4 className="text-8xl font-black leading-none">{credits ?? 0}</h4>
-                      <span className="text-xl font-bold text-primary-foreground/40 mb-3">Credits Available</span>
+                    <div className="flex flex-wrap items-end gap-4">
+                      <Coins className="h-12 w-12 fill-amber-400 text-amber-400" />
+                      <h4 className="text-6xl font-semibold leading-none">{credits ?? 0}</h4>
+                      <span className="mb-2 text-base font-medium text-primary-foreground/55">Credits Available</span>
                     </div>
                     <Button 
                       onClick={() => setIsTopUpOpen(true)}
-                      className="mt-10 h-10 px-8 rounded-full bg-primary-foreground text-primary hover:bg-primary-foreground/90 font-bold text-xs uppercase tracking-widest"
+                      className="mt-7 h-10 rounded-full bg-primary-foreground px-8 text-xs font-semibold uppercase tracking-widest text-primary hover:bg-primary-foreground/90"
                     >
                       Purchase More
                     </Button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="p-10 rounded-[40px] border border-border bg-card hover:shadow-2xl hover:shadow-foreground/5 transition-all flex flex-col justify-between">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="flex flex-col justify-between rounded-[24px] border border-border/70 bg-card p-7 shadow-sm">
                     <div>
-                      <h5 className="font-black text-2xl mb-2">Basic</h5>
-                      <p className="text-sm font-medium text-muted-foreground mb-8">Occasional learning support.</p>
+                      <h5 className="font-semibold text-2xl mb-2">Basic</h5>
+                      <p className="text-sm text-muted-foreground mb-8">Occasional learning support.</p>
                       <ul className="space-y-4 mb-10">
                          {['60 mins analysis / day', 'Basic study tools', 'Email support'].map(f => (
-                           <li key={f} className="flex items-center gap-3 text-xs font-bold text-muted-foreground">
+                           <li key={f} className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
                              <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.3)]" />
                              {f}
                            </li>
                          ))}
                       </ul>
                     </div>
-                    <Button variant="outline" className="w-full h-14 rounded-2xl border-border text-muted-foreground font-black uppercase tracking-[0.2em] text-[10px] cursor-not-allowed">Active Plan</Button>
+                    <Button variant="outline" className="h-12 w-full rounded-2xl border-border/70 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground cursor-not-allowed">Active Plan</Button>
                   </div>
 
-                  <div className="p-10 rounded-[40px] border-4 border-primary bg-card shadow-2xl shadow-primary/10 relative overflow-hidden flex flex-col justify-between group">
-                    <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-6 py-2 rounded-bl-3xl text-[10px] font-black uppercase tracking-widest">Recommended</div>
+                  <div className="group relative flex flex-col justify-between overflow-hidden rounded-[24px] border border-primary/30 bg-card p-7 shadow-sm">
+                    <div className="absolute right-0 top-0 rounded-bl-3xl bg-primary px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-primary-foreground">Recommended</div>
                     <div>
-                      <h5 className="font-black text-2xl mb-2">TubeBrain Pro</h5>
-                      <p className="text-sm font-medium text-muted-foreground mb-8">Unlimited mastery platform.</p>
+                      <h5 className="font-semibold text-2xl mb-2">TubeBrain Pro</h5>
+                      <p className="text-sm text-muted-foreground mb-8">Unlimited mastery platform.</p>
                       <ul className="space-y-4 mb-10">
                          {['Unlimited analysis', 'All study sets & tools', 'Priority support', 'Early access to AI models'].map(f => (
-                           <li key={f} className="flex items-center gap-3 text-xs font-bold text-foreground">
+                           <li key={f} className="flex items-center gap-3 text-xs font-medium text-foreground">
                              <div className="w-2 h-2 rounded-full bg-primary" />
                              {f}
                            </li>
                          ))}
                       </ul>
                     </div>
-                    <Button onClick={() => setIsTopUpOpen(true)} className="w-full h-14 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-primary/20 group-hover:scale-[1.02] transition-transform">Upgrade Now</Button>
+                    <Button onClick={() => setIsTopUpOpen(true)} className="h-12 w-full rounded-2xl bg-primary text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-sm transition-transform hover:bg-primary/90 group-hover:scale-[1.01]">Upgrade Now</Button>
                   </div>
                 </div>
               </motion.div>
@@ -311,19 +312,19 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-12"
+                className="space-y-8"
               >
-                <div className="flex items-center gap-6 mb-8">
-                  <div className="w-16 h-16 bg-secondary rounded-3xl flex items-center justify-center border border-border shadow-inner">
+                <div className="mb-6 flex items-center gap-5">
+                  <div className="w-14 h-14 bg-secondary rounded-2xl flex items-center justify-center border border-border/70 shadow-sm">
                     <Bell className="h-8 w-8 text-foreground" />
                   </div>
                   <div>
-                    <h4 className="text-3xl font-black text-foreground">Stay Updated</h4>
-                    <p className="text-sm font-medium text-muted-foreground">Configure how you receive alerts about your learning journey.</p>
+                    <h4 className="text-3xl font-semibold tracking-tight text-foreground">Stay Updated</h4>
+                    <p className="text-sm text-muted-foreground">Configure how you receive alerts about your learning journey.</p>
                   </div>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {[
                     { id: 'analysis', label: 'Analysis Complete', desc: 'Notify me when a video analysis is ready to view.' },
                     { id: 'quiz', label: 'Quiz Reminders', desc: 'Periodic reminders to review your generated flashcards and quizzes.' },
@@ -332,11 +333,11 @@ export default function SettingsPage() {
                   ].map((pref) => (
                     <div 
                       key={pref.id}
-                      className="flex items-center justify-between p-6 bg-secondary rounded-3xl border border-border"
+                      className="flex items-center justify-between rounded-2xl border border-border/70 bg-secondary/50 p-5"
                     >
                       <div className="space-y-1">
-                        <p className="text-sm font-black text-foreground uppercase tracking-widest">{pref.label}</p>
-                        <p className="text-xs text-muted-foreground font-medium">{pref.desc}</p>
+                        <p className="text-sm font-semibold uppercase tracking-widest text-foreground">{pref.label}</p>
+                        <p className="text-xs text-muted-foreground">{pref.desc}</p>
                       </div>
                       <div className="w-12 h-6 rounded-full bg-primary relative cursor-pointer">
                         <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-primary-foreground" />
@@ -348,6 +349,7 @@ export default function SettingsPage() {
             )}
           </AnimatePresence>
         </div>
+      </div>
       </div>
     </div>
   );

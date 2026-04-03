@@ -15,14 +15,52 @@ import MindMapDetail from "@/components/MindMapDetail";
 import AIChatSidebar from "@/components/AIChatSidebar";
 import { TOOL_IDS, UTILITY_TOOLS } from "@/lib/toolConstants";
 
+const ANALYSIS_UI_STORAGE_PREFIX = "youtube-genius:analysis-ui";
+
+type AnalysisUiState = {
+  activeSidebarTab: string;
+  openSidebarTabs: string[];
+  isSidebarMaximized: boolean;
+  isAutoScroll: boolean;
+};
+
+const createDefaultAnalysisUiState = (): AnalysisUiState => ({
+  activeSidebarTab: "learn",
+  openSidebarTabs: ["learn"],
+  isSidebarMaximized: false,
+  isAutoScroll: true,
+});
+
+const getAnalysisUiStorageKey = (analysisKey: string | undefined) => `${ANALYSIS_UI_STORAGE_PREFIX}:${analysisKey || "default"}`;
+
+const loadAnalysisUiState = (analysisKey: string | undefined): AnalysisUiState => {
+  if (typeof window === "undefined") {
+    return createDefaultAnalysisUiState();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getAnalysisUiStorageKey(analysisKey));
+    if (!raw) {
+      return createDefaultAnalysisUiState();
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AnalysisUiState>;
+    return {
+      activeSidebarTab: typeof parsed.activeSidebarTab === "string" ? parsed.activeSidebarTab : "learn",
+      openSidebarTabs: Array.isArray(parsed.openSidebarTabs) && parsed.openSidebarTabs.length > 0 ? parsed.openSidebarTabs : ["learn"],
+      isSidebarMaximized: typeof parsed.isSidebarMaximized === "boolean" ? parsed.isSidebarMaximized : false,
+      isAutoScroll: typeof parsed.isAutoScroll === "boolean" ? parsed.isAutoScroll : true,
+    };
+  } catch {
+    return createDefaultAnalysisUiState();
+  }
+};
+
 export default function AnalysisPage() {
   const { videoId } = useParams<{ videoId: string }>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [isMobileLearnOpen, setIsMobileLearnOpen] = useState(false);
-  const [activeSidebarTab, setActiveSidebarTab] = useState("learn");
-  const [openSidebarTabs, setOpenSidebarTabs] = useState<string[]>(["learn"]);
-  const [isSidebarMaximized, setIsSidebarMaximized] = useState(false);
-  const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const [analysisUiState, setAnalysisUiState] = useState<AnalysisUiState>(() => loadAnalysisUiState(videoId));
 
   const {
     videoData,
@@ -58,6 +96,52 @@ export default function AnalysisPage() {
 
   const { isFocusMode, setIsFocusMode, isVideoMinimized, setIsVideoMinimized } = useUIContext();
   const { spaces } = useSpacesContext();
+
+  useEffect(() => {
+    setAnalysisUiState(loadAnalysisUiState(videoId));
+  }, [videoId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(getAnalysisUiStorageKey(videoId), JSON.stringify(analysisUiState));
+  }, [analysisUiState, videoId]);
+
+  const activeSidebarTab = analysisUiState.activeSidebarTab;
+  const openSidebarTabs = analysisUiState.openSidebarTabs;
+  const isSidebarMaximized = analysisUiState.isSidebarMaximized;
+  const isAutoScroll = analysisUiState.isAutoScroll;
+
+  const setActiveSidebarTab = (tab: string) => {
+    setAnalysisUiState(prev => ({
+      ...prev,
+      activeSidebarTab: tab,
+      openSidebarTabs: prev.openSidebarTabs.includes(tab) ? prev.openSidebarTabs : [...prev.openSidebarTabs, tab],
+    }));
+  };
+
+  const setOpenSidebarTabs = (updater: ((tabs: string[]) => string[]) | string[]) => {
+    setAnalysisUiState(prev => ({
+      ...prev,
+      openSidebarTabs: typeof updater === "function" ? updater(prev.openSidebarTabs) : updater,
+    }));
+  };
+
+  const setIsSidebarMaximized = (value: boolean | ((prev: boolean) => boolean)) => {
+    setAnalysisUiState(prev => ({
+      ...prev,
+      isSidebarMaximized: typeof value === "function" ? value(prev.isSidebarMaximized) : value,
+    }));
+  };
+
+  const setIsAutoScroll = (value: boolean | ((prev: boolean) => boolean)) => {
+    setAnalysisUiState(prev => ({
+      ...prev,
+      isAutoScroll: typeof value === "function" ? value(prev.isAutoScroll) : value,
+    }));
+  };
 
   // Load analysis if videoId changes and not already loaded
   useEffect(() => {
@@ -586,6 +670,9 @@ export default function AnalysisPage() {
         isLoading={isChatLoading}
         contextSnippet={contextSnippet}
         onClearContext={() => setContextSnippet(null)}
+        title={summaryData?.overview ? "Analysis Chat" : "Video Chat"}
+        subtitle={videoData?.title || "Ask follow-up questions, request summaries, or drill into a topic."}
+        storageKey={videoId ? `analysis:${videoId}` : activeAnalysisId ? `analysis:${activeAnalysisId}` : "analysis:default"}
       />
     </motion.div>
   );

@@ -90,8 +90,8 @@ interface LearnToolsProps {
 }
 
 const LoadingState = () => (
-  <div className="p-12 text-center space-y-6">
-    <div className="w-20 h-20 rounded-[2.5rem] bg-secondary mx-auto flex items-center justify-center">
+      <div className="p-12 text-center space-y-6">
+    <div className="w-20 h-20 rounded-[28px] bg-secondary mx-auto flex items-center justify-center border border-border/70 shadow-sm">
       <div className="w-8 h-8 border-4 border-muted border-t-primary animate-spin rounded-full" />
     </div>
     <p className="text-xs font-bold text-muted-foreground capitalize">Loading analysis tool...</p>
@@ -204,8 +204,8 @@ const LearnTools = ({
         if (generatingTools.includes(TOOL_IDS.PODCAST)) {
           return (
             <div className="p-12 text-center space-y-8 animate-in fade-in duration-700">
-               <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-500/10 mx-auto flex items-center justify-center relative">
-                  <div className="absolute inset-0 rounded-[2.5rem] border-2 border-dashed border-indigo-500/20 animate-[spin_10s_linear_infinite]" />
+              <div className="w-24 h-24 rounded-[28px] bg-card mx-auto flex items-center justify-center relative border border-border/70 shadow-sm">
+                <div className="absolute inset-0 rounded-[28px] border border-dashed border-indigo-500/15 animate-[spin_10s_linear_infinite]" />
                   <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 animate-spin rounded-full shadow-[0_0_15px_rgba(99,102,241,0.3)]" />
                </div>
                <div className="space-y-3">
@@ -216,19 +216,19 @@ const LearnTools = ({
           );
         }
         return podcastData ? (
-          <div className="p-6 space-y-6">
-            <div className="flex items-center gap-4 p-6 rounded-[2.5rem] bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 shadow-xl shadow-indigo-500/10">
-              <div className="w-16 h-16 rounded-3xl bg-indigo-600 flex items-center justify-center shadow-lg">
+            <div className="p-6 space-y-6">
+            <div className="flex items-center gap-4 p-5 rounded-[28px] bg-card border border-border/70 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-sm">
                 <Headphones className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-indigo-900 dark:text-indigo-100 leading-tight">AI Generated Podcast</h3>
-                <p className="text-sm font-bold text-indigo-400 dark:text-indigo-300 mt-1 uppercase tracking-widest">Mastery Audio Edition</p>
+                <h3 className="text-xl font-semibold text-foreground leading-tight">AI Generated Podcast</h3>
+                <p className="text-sm text-muted-foreground mt-1 uppercase tracking-widest">Mastery Audio Edition</p>
               </div>
             </div>
             
             {podcastData.audioUrl && (
-              <div className="p-4 bg-card border border-border rounded-[2rem] shadow-sm">
+              <div className="p-4 bg-card border border-border/70 rounded-[24px] shadow-sm">
                 <audio controls className="w-full">
                   <source src={podcastData.audioUrl} type="audio/mpeg" />
                   Your browser does not support the audio element.
@@ -237,9 +237,9 @@ const LearnTools = ({
             )}
 
             {podcastData.script && (
-              <div className="p-8 bg-secondary/30 border border-border rounded-[2.5rem] space-y-4">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Podcast Script</h4>
-                <div className="text-sm font-medium leading-relaxed text-foreground italic">
+              <div className="p-8 bg-secondary/30 border border-border/70 rounded-[24px] space-y-4">
+                <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Podcast Script</h4>
+                <div className="text-sm leading-relaxed text-foreground italic">
                   <RichMessage content={podcastData.script} role="assistant" />
                 </div>
               </div>
@@ -256,7 +256,7 @@ const LearnTools = ({
       case TOOL_IDS.CHAPTERS:
       case TOOL_IDS.SYNTHESIS:
         return (
-          <Suspense fallback={<div className="p-8 text-center text-gray-400">Loading summary...</div>}>
+          <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading summary...</div>}>
             <SynthesisTab 
               overview={overview}
               keyPoints={keyPoints}
@@ -275,26 +275,26 @@ const LearnTools = ({
         );
       case TOOL_IDS.VIDEO:
         return (
-          <div className="p-6">
-            <div className="flex items-center gap-4 p-6 rounded-[2.5rem] bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 shadow-xl shadow-blue-500/10 mb-8">
-              <div className="w-16 h-16 rounded-3xl bg-blue-600 flex items-center justify-center shadow-lg">
+            <div className="p-6">
+            <div className="flex items-center gap-4 p-5 rounded-[28px] bg-card border border-border/70 shadow-sm mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-sm">
                 <Video className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-blue-900 dark:text-blue-100 leading-tight">Mastery Video</h3>
-                <p className="text-sm font-bold text-blue-400 dark:text-blue-300 mt-1 uppercase tracking-widest">Active Player Context</p>
+                <h3 className="text-xl font-semibold text-foreground leading-tight">Mastery Video</h3>
+                <p className="text-sm text-muted-foreground mt-1 uppercase tracking-widest">Active Player Context</p>
               </div>
             </div>
-            <div className="p-8 bg-secondary/30 border border-border rounded-[2.5rem] space-y-4">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Player Navigation</h4>
-                <p className="text-sm font-medium leading-relaxed text-foreground">
+            <div className="p-8 bg-secondary/30 border border-border/70 rounded-[24px] space-y-4">
+                <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Player Navigation</h4>
+                <p className="text-sm leading-relaxed text-foreground">
                     The video is playing in the main viewport on the left. Use the **Chapters** and **Transcript** tabs to navigate to specific insights. You can also ask follow-up questions about specific moments here.
                 </p>
                 <div className="grid grid-cols-2 gap-3 mt-4">
-                    <Button variant="outline" className="rounded-2xl border-border font-bold text-[10px] h-10 uppercase tracking-widest" onClick={() => onSidebarTabChange?.('chapters')}>
+                    <Button variant="outline" className="rounded-2xl border-border/70 font-medium text-[10px] h-10 uppercase tracking-widest" onClick={() => onSidebarTabChange?.('chapters')}>
                         Open Chapters
                     </Button>
-                    <Button variant="outline" className="rounded-2xl border-border font-bold text-[10px] h-10 uppercase tracking-widest" onClick={() => onSidebarTabChange?.('transcripts')}>
+                    <Button variant="outline" className="rounded-2xl border-border/70 font-medium text-[10px] h-10 uppercase tracking-widest" onClick={() => onSidebarTabChange?.('transcripts')}>
                         View Transcript
                     </Button>
                 </div>
@@ -305,25 +305,25 @@ const LearnTools = ({
         if (activeGeneratingTools.includes(TOOL_IDS.GLOSSARY)) {
           return (
             <div className="p-12 text-center space-y-6 animate-pulse">
-               <div className="w-20 h-20 rounded-[2.5rem] bg-purple-50 dark:bg-purple-900/20 mx-auto flex items-center justify-center">
+               <div className="w-20 h-20 rounded-[28px] bg-card mx-auto flex items-center justify-center border border-border/70 shadow-sm">
                   <div className="w-8 h-8 border-4 border-purple-200 dark:border-purple-800 border-t-purple-600 animate-spin rounded-full" />
                </div>
                <div className="space-y-2">
-                 <h3 className="text-lg font-black text-purple-900 dark:text-purple-100">Term Analysis</h3>
-                 <p className="text-xs font-medium text-muted-foreground">Extracting video-specific jargon...</p>
+                 <h3 className="text-lg font-semibold text-foreground">Term Analysis</h3>
+                 <p className="text-xs text-muted-foreground">Extracting video-specific jargon...</p>
                </div>
             </div>
           );
         }
         return (
           <div className="p-6">
-             <div className="flex items-center gap-4 p-6 rounded-[2.5rem] bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 shadow-xl shadow-purple-500/10 mb-8">
-              <div className="w-16 h-16 rounded-3xl bg-purple-600 flex items-center justify-center shadow-lg">
+             <div className="flex items-center gap-4 p-5 rounded-[28px] bg-card border border-border/70 shadow-sm mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-purple-600 flex items-center justify-center shadow-sm">
                 <Library className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-purple-900 dark:text-purple-100 leading-tight">Video Glossary</h3>
-                <p className="text-sm font-bold text-purple-400 dark:text-purple-300 mt-1 uppercase tracking-widest">Terminology Mastery</p>
+                <h3 className="text-xl font-semibold text-foreground leading-tight">Video Glossary</h3>
+                <p className="text-sm text-muted-foreground mt-1 uppercase tracking-widest">Terminology Mastery</p>
               </div>
             </div>
 
@@ -335,23 +335,23 @@ const LearnTools = ({
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.05 }}
-                            className="p-6 rounded-[2rem] bg-card border border-border shadow-sm hover:shadow-md transition-all group"
+                            className="p-6 rounded-[24px] bg-card border border-border/70 shadow-sm hover:shadow-md transition-all group"
                         >
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                                     <BookOpen className="h-4 w-4" />
                                 </div>
-                                <h4 className="text-sm font-black text-foreground tracking-tight">{item.term}</h4>
+                                <h4 className="text-sm font-semibold text-foreground tracking-tight">{item.term}</h4>
                             </div>
-                            <p className="text-xs text-muted-foreground font-medium leading-relaxed pl-11">
+                            <p className="text-xs text-muted-foreground leading-relaxed pl-11">
                                 {item.definition}
                             </p>
                         </motion.div>
                     ))}
                 </div>
             ) : (
-                <div className="p-8 bg-secondary/30 border border-dashed border-border rounded-[2.5rem] text-center space-y-4">
-                    <p className="text-xs font-bold text-muted-foreground">No terms analyzed yet.</p>
+                <div className="p-8 bg-secondary/30 border border-dashed border-border/70 rounded-[24px] text-center space-y-4">
+                  <p className="text-xs text-muted-foreground">No terms analyzed yet.</p>
                 </div>
             )}
           </div>
@@ -360,25 +360,25 @@ const LearnTools = ({
         if (activeGeneratingTools.includes(TOOL_IDS.RESOURCES)) {
           return (
             <div className="p-12 text-center space-y-6 animate-pulse">
-               <div className="w-20 h-20 rounded-[2.5rem] bg-cyan-50 dark:bg-cyan-900/20 mx-auto flex items-center justify-center">
+               <div className="w-20 h-20 rounded-[28px] bg-card mx-auto flex items-center justify-center border border-border/70 shadow-sm">
                   <div className="w-8 h-8 border-4 border-cyan-200 dark:border-cyan-800 border-t-cyan-600 animate-spin rounded-full" />
                </div>
                <div className="space-y-2">
-                 <h3 className="text-lg font-black text-cyan-900 dark:text-cyan-100">Finding Mentions</h3>
-                 <p className="text-xs font-medium text-muted-foreground">Scanning for tools, books and links...</p>
+                 <h3 className="text-lg font-semibold text-foreground">Finding Mentions</h3>
+                 <p className="text-xs text-muted-foreground">Scanning for tools, books and links...</p>
                </div>
             </div>
           );
         }
         return (
           <div className="p-6">
-             <div className="flex items-center gap-4 p-6 rounded-[2.5rem] bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-100 dark:border-cyan-800 shadow-xl shadow-cyan-500/10 mb-8">
-              <div className="w-16 h-16 rounded-3xl bg-cyan-600 flex items-center justify-center shadow-lg">
+             <div className="flex items-center gap-4 p-5 rounded-[28px] bg-card border border-border/70 shadow-sm mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-600 flex items-center justify-center shadow-sm">
                 <ExternalLink className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-cyan-900 dark:text-cyan-100 leading-tight">Resource Hub</h3>
-                <p className="text-sm font-bold text-cyan-400 dark:text-cyan-300 mt-1 uppercase tracking-widest">External References</p>
+                <h3 className="text-xl font-semibold text-foreground leading-tight">Resource Hub</h3>
+                <p className="text-sm text-muted-foreground mt-1 uppercase tracking-widest">External References</p>
               </div>
             </div>
 
@@ -390,12 +390,12 @@ const LearnTools = ({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: i * 0.05 }}
-                            className="p-6 rounded-[2rem] bg-card border border-border shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+                            className="p-6 rounded-[24px] bg-card border border-border/70 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
                         >
                             <div className="flex items-start justify-between">
                                 <div className="space-y-1">
-                                    <h4 className="text-sm font-black text-foreground tracking-tight">{res.name}</h4>
-                                    <p className="text-[10px] text-muted-foreground font-bold leading-relaxed pr-4">
+                                    <h4 className="text-sm font-semibold text-foreground tracking-tight">{res.name}</h4>
+                                    <p className="text-[10px] text-muted-foreground leading-relaxed pr-4">
                                         {res.description}
                                     </p>
                                 </div>
@@ -422,14 +422,14 @@ const LearnTools = ({
         );
       case TOOL_IDS.TRANSCRIPT:
         return (
-          <div className="p-6">
+            <div className="p-6">
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 rounded-2xl bg-secondary text-primary flex items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-secondary text-primary flex items-center justify-center border border-border/70">
                 <FileText className="h-5 w-5" />
               </div>
-              <h3 className="text-lg font-black tracking-tight text-foreground">Full Transcript</h3>
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">Full Transcript</h3>
             </div>
-            <div className="p-8 rounded-[2.5rem] bg-secondary/30 border border-border text-sm font-medium leading-relaxed text-muted-foreground">
+            <div className="p-8 rounded-[24px] bg-secondary/30 border border-border/70 text-sm leading-relaxed text-muted-foreground">
               The full transcript is synchronized with the video player. You can jump to any section using the timestamps in the Summary or Chapters view.
             </div>
           </div>
@@ -438,12 +438,12 @@ const LearnTools = ({
         if (generatingTools.includes(TOOL_IDS.QUIZ)) {
           return (
             <div className="p-12 text-center space-y-6 animate-pulse">
-               <div className="w-20 h-20 rounded-[2.5rem] bg-rose-50 mx-auto flex items-center justify-center">
+              <div className="w-20 h-20 rounded-[28px] bg-card mx-auto flex items-center justify-center border border-border/70 shadow-sm">
                   <div className="w-8 h-8 border-4 border-rose-200 border-t-rose-600 animate-spin rounded-full" />
                </div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-black text-foreground">Crafting Quiz</h3>
-                  <p className="text-xs font-medium text-muted-foreground">Designing questions to test your knowledge...</p>
+                <h3 className="text-lg font-semibold text-foreground">Crafting Quiz</h3>
+                <p className="text-xs text-muted-foreground">Designing questions to test your knowledge...</p>
                 </div>
             </div>
           );
@@ -466,12 +466,12 @@ const LearnTools = ({
         if (generatingTools.includes(TOOL_IDS.FLASHCARDS)) {
           return (
             <div className="p-12 text-center space-y-6 animate-pulse">
-               <div className="w-20 h-20 rounded-[2.5rem] bg-orange-50 mx-auto flex items-center justify-center">
+              <div className="w-20 h-20 rounded-[28px] bg-card mx-auto flex items-center justify-center border border-border/70 shadow-sm">
                   <div className="w-8 h-8 border-4 border-orange-200 border-t-orange-600 animate-spin rounded-full" />
                </div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-black text-foreground">Generating Cards</h3>
-                  <p className="text-xs font-medium text-muted-foreground">Creating flashcards for spaced repetition...</p>
+                <h3 className="text-lg font-semibold text-foreground">Generating Cards</h3>
+                <p className="text-xs text-muted-foreground">Creating flashcards for spaced repetition...</p>
                 </div>
             </div>
           );
@@ -494,12 +494,12 @@ const LearnTools = ({
         if (generatingTools.includes(TOOL_IDS.ROADMAP)) {
           return (
             <div className="p-12 text-center space-y-6 animate-pulse">
-               <div className="w-20 h-20 rounded-[2.5rem] bg-emerald-50 mx-auto flex items-center justify-center">
+              <div className="w-20 h-20 rounded-[28px] bg-card mx-auto flex items-center justify-center border border-border/70 shadow-sm">
                   <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 animate-spin rounded-full" />
                </div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-black text-foreground">Mapping Knowledge</h3>
-                  <p className="text-xs font-medium text-muted-foreground">Structuring your personalized learning path...</p>
+                <h3 className="text-lg font-semibold text-foreground">Mapping Knowledge</h3>
+                <p className="text-xs text-muted-foreground">Structuring your personalized learning path...</p>
                 </div>
             </div>
           );
@@ -532,8 +532,8 @@ const LearnTools = ({
                   <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-600 animate-spin rounded-full" />
                </div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-black text-foreground">Note Crafting</h3>
-                  <p className="text-xs font-medium text-muted-foreground">Synthesizing study materials...</p>
+                  <h3 className="text-lg font-semibold text-foreground">Note Crafting</h3>
+                  <p className="text-xs text-muted-foreground">Synthesizing study materials...</p>
                 </div>
             </div>
           );
@@ -547,12 +547,12 @@ const LearnTools = ({
                     <Sparkles className="h-6 w-6" />
                  </div>
                  <div className="space-y-1">
-                    <h4 className="text-sm font-black text-foreground">AI Study Assistant</h4>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Enhance your drafts</p>
+                      <h4 className="text-sm font-semibold text-foreground">AI Study Assistant</h4>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Enhance your drafts</p>
                  </div>
                  <Button 
                     onClick={() => onToolClick?.('notes', 'Create comprehensive study notes from this video content.', '[Action]: Generate AI Notes')}
-                    className="w-full rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase tracking-widest text-[10px] h-12"
+                      className="h-12 w-full rounded-2xl bg-primary text-[10px] font-semibold uppercase tracking-widest text-primary-foreground hover:bg-primary/90"
                  >
                     Inject AI Insights
                  </Button>
@@ -564,16 +564,16 @@ const LearnTools = ({
                     <motion.div 
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-gray-900 rounded-[2.5rem] p-8 border border-white/10 shadow-2xl"
+                        className="rounded-[2.5rem] border border-white/10 bg-gray-900 p-8 shadow-2xl"
                     >
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="h-4 w-4 text-amber-400" />
-                                <span className="text-[10px] font-black text-amber-100 uppercase tracking-widest">AI Insights</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-100">AI Insights</span>
                             </div>
                             <button 
                                 onClick={() => setShowConversation(true)}
-                                className="text-[10px] font-bold text-amber-400 hover:text-white underline underline-offset-4"
+                                className="text-[10px] font-semibold text-amber-400 underline underline-offset-4 hover:text-white"
                             >
                                 Discuss in Chat
                             </button>
@@ -582,7 +582,7 @@ const LearnTools = ({
                             <RichMessage 
                                 content={currentToolMessages[currentToolMessages.length - 1].content} 
                                 role="assistant" 
-                                className="text-gray-300"
+                                className="text-gray-200"
                             />
                         </div>
                     </motion.div>
@@ -793,11 +793,11 @@ const LearnTools = ({
                     {/* Generated Items Section - My Sets */}
                     <div className="space-y-4 pt-4 pb-12">
                       <div className="flex items-center justify-between px-1">
-                        <h3 className="text-xs font-bold text-muted-foreground opacity-70 uppercase tracking-widest">My Sets</h3>
+                        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground opacity-70">My Sets</h3>
                         <div className="flex items-center gap-3">
                            <div className="flex items-center gap-1 opacity-40">
                               <Sliders className="h-3.5 w-3.5" />
-                              <span className="text-[10px] font-black">1</span>
+                              <span className="text-[10px] font-semibold">1</span>
                            </div>
                         </div>
                       </div>
@@ -809,21 +809,21 @@ const LearnTools = ({
                             disabled={set.isGenerating}
                             onClick={() => onToolClick?.(set.type)}
                             className={cn(
-                              "w-full flex items-center gap-4 p-4 rounded-3xl bg-white border border-gray-50 transition-all group",
-                              set.isGenerating ? "opacity-60 cursor-not-allowed" : "hover:border-gray-100 hover:shadow-md hover:shadow-black/[0.02]"
+                              "group w-full rounded-3xl border border-border bg-card p-4 transition-all",
+                              set.isGenerating ? "cursor-not-allowed opacity-60" : "hover:border-border/80 hover:shadow-md hover:shadow-foreground/[0.04]"
                             )}
                           >
                             <div className={cn(
                               "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
-                              set.isGenerating ? "bg-gray-50 text-gray-400" : (
-                                set.type === TOOL_IDS.QUIZ ? "bg-red-50 text-red-500" :
-                                set.type === TOOL_IDS.ROADMAP ? "bg-emerald-50 text-emerald-500" :
-                                set.type === TOOL_IDS.FLASHCARDS ? "bg-amber-50 text-amber-500" :
-                                set.type === TOOL_IDS.SUMMARY ? "bg-blue-50 text-blue-500" :
-                                "bg-indigo-50 text-indigo-500"
+                              set.isGenerating ? "bg-secondary text-muted-foreground" : (
+                                set.type === TOOL_IDS.QUIZ ? "bg-red-500/10 text-red-500" :
+                                set.type === TOOL_IDS.ROADMAP ? "bg-emerald-500/10 text-emerald-500" :
+                                set.type === TOOL_IDS.FLASHCARDS ? "bg-amber-500/10 text-amber-500" :
+                                set.type === TOOL_IDS.SUMMARY ? "bg-blue-500/10 text-blue-500" :
+                                "bg-indigo-500/10 text-indigo-500"
                               )
                             )}>
-                               {set.isGenerating ? <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 animate-spin rounded-full" /> : (
+                               {set.isGenerating ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" /> : (
                                  set.type === TOOL_IDS.QUIZ ? <HelpCircle className="h-5 w-5" /> :
                                   set.type === TOOL_IDS.ROADMAP ? <Target className="h-5 w-5" /> :
                                   set.type === TOOL_IDS.FLASHCARDS ? <Layers className="h-5 w-5" /> :
@@ -832,8 +832,8 @@ const LearnTools = ({
                                )}
                             </div>
                             <div className="flex-1 text-left">
-                              <p className="text-[13px] font-black text-gray-800 line-clamp-1">{set.name}</p>
-                              <p className="text-[10px] font-bold text-gray-400 mt-0.5 opacity-80 uppercase tracking-tighter">
+                              <p className="line-clamp-1 text-[13px] font-semibold text-foreground">{set.name}</p>
+                              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-tighter text-muted-foreground opacity-80">
                                   {set.isGenerating ? 'Content is being generated...' : (
                                     set.type === TOOL_IDS.QUIZ ? '10 questions left • All topics' :
                                      set.type === TOOL_IDS.SUMMARY ? 'Detailed Summary • All topics' :
@@ -842,14 +842,14 @@ const LearnTools = ({
                                   )}
                               </p>
                             </div>
-                            {!set.isGenerating && <MoreVertical className="h-4 w-4 text-gray-300 opacity-40" />}
+                             {!set.isGenerating && <MoreVertical className="h-4 w-4 text-muted-foreground/50" />}
                           </button>
                         )) : (
-                          <div className="p-10 text-center space-y-3 grayscale opacity-30">
-                             <div className="w-16 h-16 rounded-[2.5rem] bg-gray-50 border border-gray-200 mx-auto flex items-center justify-center">
-                                <LayoutGrid className="h-8 w-8 text-gray-300" />
+                            <div className="space-y-3 p-10 text-center opacity-40">
+                              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[2.5rem] border border-border bg-secondary">
+                                <LayoutGrid className="h-8 w-8 text-muted-foreground" />
                              </div>
-                             <p className="text-xs font-bold text-gray-400">Generate your first set to see it here.</p>
+                              <p className="text-xs font-medium text-muted-foreground">Generate your first set to see it here.</p>
                           </div>
                         )}
                       </div>
@@ -868,13 +868,13 @@ const LearnTools = ({
       </div>
 
       {/* Large Bottom Input Section - Fixed at bottom */}
-      <div className="p-6 pt-2 bg-white border-t border-gray-50 shrink-0">
+      <div className="shrink-0 border-t border-border bg-background p-6 pt-2">
          <div className="flex items-center justify-between mb-4 px-2">
             <div className="flex items-center gap-2">
-               <span className="text-[10px] font-bold text-gray-400 tracking-tight">Chatting in:</span>
-               <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100">
-                  <div className="w-1.5 h-1.5 rounded-full bg-black/40" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-black/60">New Chat</span>
+            <span className="text-[10px] font-semibold tracking-tight text-muted-foreground">Chatting in:</span>
+            <div className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-foreground/40" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground/70">New Chat</span>
                </div>
             </div>
             <div className="flex items-center gap-4 opacity-30 hover:opacity-100 transition-opacity">
@@ -889,15 +889,15 @@ const LearnTools = ({
                onChange={(e) => setAskInput(e.target.value)}
                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleAsk())}
                placeholder="Ask anything"
-               className="w-full h-14 bg-gray-50/50 border border-gray-100 rounded-3xl pl-6 pr-24 py-4 text-sm font-bold placeholder:text-gray-300 focus:outline-none focus:bg-white focus:border-gray-200 focus:ring-8 focus:ring-black/[0.02] transition-all scrollbar-none resize-none"
+              className="scrollbar-none h-14 w-full resize-none rounded-3xl border border-border bg-secondary/50 py-4 pl-6 pr-24 text-sm font-medium text-foreground placeholder:text-muted-foreground/60 transition-all focus:border-border focus:bg-background focus:outline-none focus:ring-8 focus:ring-foreground/[0.04]"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2">
                <button 
                   onClick={handleAsk}
-                  className="bg-black text-white flex items-center gap-2 pl-4 pr-3 py-2 rounded-2xl shadow-xl shadow-black/10 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                className="flex items-center gap-2 rounded-2xl bg-primary py-2 pl-4 pr-3 text-primary-foreground shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
                >
                   <Mic className="h-3.5 w-3.5" />
-                  <span className="text-[11px] font-black uppercase tracking-widest -mb-0.5">Voice</span>
+                <span className="-mb-0.5 text-[11px] font-semibold uppercase tracking-widest">Voice</span>
                </button>
             </div>
          </div>

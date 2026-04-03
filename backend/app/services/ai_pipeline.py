@@ -269,22 +269,88 @@ Return ONLY valid JSON with this EXACT structure:
 }}"""
 
 
-# Fast initial analysis - just overview, key points, and timestamps
+# Fast initial analysis - high-throughput prompt
 FAST_INITIAL_PROMPT = """You are an expert video analyst. Analyze this transcript quickly and precisely.
 Respond in {language}. Target audience: {expertise}.
 
+**CRITICAL: Chapter Generation**
+You MUST identify and generate 5-12 logical, descriptive chapter markers for this video based on topic shifts in the transcript. 
+Each label must be high-quality (min 5 words) and clearly describe the insight of that section. 
+The first chapter must be at 0:00.
+
 Return ONLY valid JSON with this structure:
 {{
-  "overview": "2-3 paragraph summary of the main content and insights",
-  "key_points": ["5-8 key insights from the video"],
-  "takeaways": ["3-5 actionable takeaways"],
+  "overview": "2 dense paragraphs of professional insights",
+  "key_points": ["8-12 high-impact points"],
+  "takeaways": ["4-6 actionable takeaways"],
   "timestamps": [
-    {{"time": "0:00", "label": "Section description (5+ words)"}}
+    {{"time": "0:00", "label": "Mandatory Introduction and core premise (5+ words)"}},
+    {{"time": "M:SS", "label": "Descriptive topic shift label (5+ words)"}}
   ],
-  "tags": ["relevant", "topic", "tags"]
-}}
+  "tags": ["relevant", "tags"]
+}}"""
 
-Be concise but insightful. Focus on the most important content."""
+
+MAP_SUMMARIZE_PROMPT = """You are an expert video analyst. Summarize the following segment of a transcript.
+Focus on:
+1. Key technical or conceptual insights.
+2. Important names, dates, or specific facts.
+3. The overall "vibe" and purpose of this segment.
+
+Keep your summary dense and factual (max 500 words). This will be combined with other segments later.
+Respond in {language}."""
+
+
+async def _summarize_segment(
+    text: str,
+    language: str,
+    provider: str,
+    model: str,
+    semaphore: asyncio.Semaphore,
+) -> str:
+    """Summarize a single segment of a long transcript with concurrency limiting."""
+    messages = [
+        {"role": "system", "content": MAP_SUMMARIZE_PROMPT.format(language=language)},
+        {"role": "user", "content": f"Transcript Segment:\n{text}"},
+    ]
+    async with semaphore:
+        try:
+            return await _call_ai_with_fallback(provider, model, messages, require_json=False)
+        except Exception as e:
+            logger.error(f"Segment summarization failed: {e}")
+            return f"[Partial summary failed for segment of {len(text.split())} words]"
+
+
+async def _summarize_chunks_parallel(
+    transcript_text: str,
+    language: str,
+    provider: str,
+    model: str,
+    chunk_size_tokens: int = 10000,
+) -> str:
+    """Divide a long transcript and summarize segments in parallel (Pyramid approach for scale)."""
+    words = transcript_text.split()
+    segment_size_words = int(chunk_size_tokens / 0.75)
+    
+    segments = [" ".join(words[i : i + segment_size_words]) for i in range(0, len(words), segment_size_words)]
+    logger.info(f"Dividing long transcript into {len(segments)} segments (Ultra-Scale Map)")
+    
+    # Concurrency limiter to prevent 429s
+    semaphore = asyncio.Semaphore(10)
+    
+    tasks = [_summarize_segment(seg, language, provider, model, semaphore) for seg in segments]
+    summaries = await asyncio.gather(*tasks)
+    
+    # Recursive reduction if too many summaries for a single prompt
+    if len(summaries) > 15:
+        logger.info(f"Level 2 'Pyramid' Reduction triggered for {len(summaries)} summaries")
+        # Cluster summaries into meta-chunks (e.g., 5 summaries per meta-chunk)
+        meta_chunks = ["\n\n".join(summaries[i : i + 5]) for i in range(0, len(summaries), 5)]
+        meta_tasks = [_summarize_segment(mc, language, provider, model, semaphore) for mc in meta_chunks]
+        summaries = await asyncio.gather(*meta_tasks)
+        
+    combined_summary = "\n\n--- SCALE-OPTIMIZED SEGMENT SUMMARIES ---\n\n".join(summaries)
+    return combined_summary
 
 
 async def synthesize_content(
@@ -329,13 +395,29 @@ async def synthesize_content(
         if is_multi_video:
             system_prompt += "\n\nNote: You are analyzing MULTIPLE videos. Synthesize them into one unified analysis."
 
-    # Truncate transcript to fit context window
-    max_transcript_tokens = 12000
-    truncated = _truncate_to_tokens(transcript_text, max_transcript_tokens)
+    # Resilience Mode: Check if this is a metadata-only fallback
+    is_metadata_only = "ANALYSIS SOURCE: VIDEO METADATA" in transcript_text
+    if is_metadata_only:
+        system_prompt += "\n\nIMPORTANT: Full transcription was unavailable for this video. You are performing a 'Full-Spectrum Resilience Analysis' based ONLY on the video Title and Description. Still provide a full, structured analysis (Overview, Key Points, Quiz, Flashcards, etc.). \n\n**CRITICAL**: You must reconstruct a detailed 'Narrative Summary Transcript' as the first part of your response. Use the provided roadmap context to imagine how the content would flow and be as detailed as possible. DO NOT mention that the transcript is missing—just be an insightful AI analyst."
+
+    # Map-Reduce logic for long transcripts
+    total_tokens = count_tokens(transcript_text)
+    max_single_prompt_tokens = 10000
+    
+    if total_tokens > max_single_prompt_tokens + 2000: # 2k buffer
+        logger.info(f"Transcript too long ({total_tokens} tokens). Using Map-Reduce approach.")
+        # Step 1: Map (Parallel Summarization)
+        summary_of_transcript = await _summarize_chunks_parallel(
+            transcript_text, language, provider, model, chunk_size_tokens=max_single_prompt_tokens
+        )
+        context_text = f"The following is a synthesised summary of a long video transcript. Use this to generate the final structured analysis.\n\nSummary:\n{summary_of_transcript}"
+    else:
+        # Standard approach for shorter videos
+        context_text = f"Transcript:\n{transcript_text}"
 
     title = metadata.get("title", "Unknown")
     channel = metadata.get("channel", "Unknown")
-    user_content = f'Video: "{title}" by {channel}\n\nTranscript:\n{truncated}'
+    user_content = f'Video: "{title}" by {channel}\n\n{context_text}'
 
     messages = [
         {"role": "system", "content": system_prompt},

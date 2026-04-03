@@ -85,36 +85,36 @@ const NotesTool = () => {
   const aiNotesDraft = chatMessages.find(m => m.toolId === 'notes' && m.role === 'assistant')?.content;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-250px)] bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-2xl relative">
+    <div className="relative flex h-[calc(100vh-250px)] flex-col overflow-hidden rounded-[2.5rem] border border-border bg-card shadow-xl">
       {/* Primary Toolbar */}
-      <div className="flex items-center gap-1 p-3 border-b border-gray-50 bg-gray-50/50 sticky top-0 z-10 overflow-x-auto scrollbar-none">
-        <div className="flex bg-white rounded-xl border border-gray-100 p-0.5 shadow-sm">
-          <Button onClick={() => insertText("**", "**")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><Bold className="h-3 w-3" /></Button>
-          <Button onClick={() => insertText("_", "_")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><Italic className="h-3 w-3" /></Button>
-          <Button onClick={() => insertText("\n# ", "")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><Heading1 className="h-3 w-3" /></Button>
-          <Button onClick={() => insertText("\n## ", "")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><Heading2 className="h-3 w-3" /></Button>
+      <div className="sticky top-0 z-10 flex items-center gap-1 overflow-x-auto border-b border-border bg-secondary/40 p-3 scrollbar-none">
+        <div className="flex rounded-xl border border-border bg-background p-0.5 shadow-sm">
+          <Button onClick={() => insertText("**", "**")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><Bold className="h-3 w-3" /></Button>
+          <Button onClick={() => insertText("_", "_")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><Italic className="h-3 w-3" /></Button>
+          <Button onClick={() => insertText("\n# ", "")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><Heading1 className="h-3 w-3" /></Button>
+          <Button onClick={() => insertText("\n## ", "")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><Heading2 className="h-3 w-3" /></Button>
         </div>
         
-        <div className="w-px h-4 bg-gray-200 mx-1" />
+        <div className="mx-1 h-4 w-px bg-border" />
         
-        <div className="flex bg-white rounded-xl border border-gray-100 p-0.5 shadow-sm">
-          <Button onClick={() => insertText("\n- ", "")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><List className="h-3 w-3" /></Button>
-          <Button onClick={() => insertText("\n1. ", "")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><ListOrdered className="h-3 w-3" /></Button>
-          <Button onClick={() => insertText("`", "`")} variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-gray-50"><Code className="h-3 w-3" /></Button>
+        <div className="flex rounded-xl border border-border bg-background p-0.5 shadow-sm">
+          <Button onClick={() => insertText("\n- ", "")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><List className="h-3 w-3" /></Button>
+          <Button onClick={() => insertText("\n1. ", "")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><ListOrdered className="h-3 w-3" /></Button>
+          <Button onClick={() => insertText("`", "`")} variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 hover:bg-secondary"><Code className="h-3 w-3" /></Button>
         </div>
 
-        <div className="w-px h-4 bg-gray-200 mx-1" />
+        <div className="mx-1 h-4 w-px bg-border" />
 
-        <div className="flex bg-white rounded-xl border border-gray-100 p-0.5 shadow-sm">
-          <Button onClick={insertTimestamp} title="Current Timestamp" variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-indigo-50 text-indigo-600"><Clock className="h-3 w-3" /></Button>
-          <Button onClick={insertLastCaption} title="Insert Caption" variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg hover:bg-indigo-50 text-indigo-600"><Quote className="h-3 w-3" /></Button>
+        <div className="flex rounded-xl border border-border bg-background p-0.5 shadow-sm">
+          <Button onClick={insertTimestamp} title="Current Timestamp" variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 text-indigo-600 hover:bg-indigo-500/10"><Clock className="h-3 w-3" /></Button>
+          <Button onClick={insertLastCaption} title="Insert Caption" variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0 text-indigo-600 hover:bg-indigo-500/10"><Quote className="h-3 w-3" /></Button>
         </div>
 
         <div className="ml-auto flex items-center gap-1">
-          <Button onClick={() => handleExport('md')} variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-gray-400 hover:text-gray-900 transition-colors gap-1.5 font-black text-[10px] uppercase tracking-widest">
+          <Button onClick={() => handleExport('md')} variant="ghost" size="sm" className="h-8 gap-1.5 rounded-lg px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground">
             <Download className="h-3 w-3" /> Export
           </Button>
-          <div className="w-px h-4 bg-gray-200 mx-1" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors">
             {isNotesSaving ? <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent animate-spin rounded-full" /> : <Check className="h-3.5 w-3.5" />}
           </Button>
@@ -122,16 +122,16 @@ const NotesTool = () => {
       </div>
 
       {/* AI Action Strip */}
-      <div className="flex items-center gap-2 p-3 bg-indigo-600/5 border-b border-indigo-100 overflow-x-auto scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-border bg-indigo-500/5 p-3 scrollbar-none">
         <div className="flex items-center gap-1.5 mr-2">
             <Sparkles className="h-3 w-3 text-indigo-600" />
-            <span className="text-[10px] font-black uppercase text-indigo-900 tracking-tighter">AI Assistant</span>
+        <span className="text-[10px] font-semibold uppercase tracking-tighter text-indigo-600">AI Assistant</span>
         </div>
         <Button 
             onClick={() => handleGenerateTool('notes')}
             variant="outline" 
             size="sm" 
-            className="h-7 rounded-full border-indigo-200 bg-white text-indigo-600 font-bold text-[9px] uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+            className="h-7 rounded-full border-indigo-300/60 bg-background text-[9px] font-semibold uppercase tracking-wider text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
         >
             <Wand2 className="h-2.5 w-2.5 mr-1" /> Enhance Notes
         </Button>
@@ -139,22 +139,22 @@ const NotesTool = () => {
             onClick={() => handleToolClick('ask', 'Summarize my current study notes into a 3-sentence executive summary.', '[Action]: Summarize Notes')}
             variant="outline" 
             size="sm" 
-            className="h-7 rounded-full border-purple-200 bg-white text-purple-600 font-bold text-[9px] uppercase tracking-wider hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+            className="h-7 rounded-full border-purple-300/60 bg-background text-[9px] font-semibold uppercase tracking-wider text-purple-600 shadow-sm transition-all hover:bg-purple-600 hover:text-white"
         >
             Executive Summary
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border">
         {/* Title Input */}
         <div className="px-8 pt-8 pb-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-tighter text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg">Active Session</span>
+            <span className="rounded-lg bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-tighter text-indigo-600">Active Session</span>
           </div>
           <input 
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="text-3xl font-black w-full bg-transparent focus:outline-none placeholder:text-gray-200 tracking-tight text-gray-900"
+            className="w-full bg-transparent text-3xl font-semibold tracking-tight text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
             placeholder="Untitled Wisdom"
           />
         </div>
@@ -165,12 +165,12 @@ const NotesTool = () => {
                 <motion.div 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
-                    className="mx-8 mb-6 p-6 rounded-[2rem] bg-indigo-900 text-white shadow-xl shadow-indigo-500/20 relative group"
+                    className="relative mx-8 mb-6 rounded-[2rem] bg-indigo-900 p-6 text-white shadow-xl shadow-indigo-500/20 group"
                 >
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <Sparkles className="h-4 w-4 text-indigo-300" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">AI Enhancement Draft</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-indigo-200">AI Enhancement Draft</span>
                         </div>
                         <Button 
                             onClick={() => {
@@ -178,7 +178,7 @@ const NotesTool = () => {
                                 setInternalContent(merged);
                                 updateUserNotes(merged);
                             }}
-                            className="h-8 rounded-xl bg-white text-indigo-600 hover:bg-indigo-50 font-black text-[10px] uppercase px-4 shadow-lg active:scale-95 transition-all"
+                            className="h-8 rounded-xl bg-white px-4 text-[10px] font-semibold uppercase text-indigo-600 shadow-lg transition-all active:scale-95 hover:bg-indigo-50"
                         >
                             Merge with My Notes
                         </Button>
@@ -196,14 +196,14 @@ const NotesTool = () => {
             ref={textAreaRef}
             value={internalContent}
             onChange={handleChange}
-            className="w-full min-h-[500px] text-base leading-relaxed text-gray-700 bg-transparent focus:outline-none resize-none scrollbar-none font-medium placeholder:text-gray-200 placeholder:italic"
+            className="scrollbar-none min-h-[500px] w-full resize-none bg-transparent text-base font-medium leading-relaxed text-foreground placeholder:italic placeholder:text-muted-foreground/50 focus:outline-none"
             placeholder="Capture your epiphanies here... Use the toolbar above to link timestamps or get AI writing help."
           />
         </div>
       </div>
 
       {/* Footer Stats */}
-      <div className="p-4 bg-white border-t border-gray-100 flex items-center justify-between text-[10px] font-bold text-gray-400 px-8 uppercase tracking-widest">
+      <div className="flex items-center justify-between border-t border-border bg-background p-4 px-8 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
         <div className="flex items-center gap-6">
           <span className="flex items-center gap-1.5"><Type className="h-3 w-3" /> {internalContent.split(/\s+/).filter(Boolean).length} Words</span>
           <span className="flex items-center gap-1.5"><FileText className="h-3 w-3" /> {internalContent.length} Chars</span>

@@ -134,7 +134,7 @@ const QuizTab = ({
           <h3 className="text-2xl font-bold text-foreground mt-4">
             {pct >= 90 ? "Outstanding!" : pct >= 70 ? "Well Done!" : "Keep Learning!"}
           </h3>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Score Achieved</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest">Score Achieved</p>
           <div className="text-6xl font-bold text-foreground my-6">{score}<span className="text-2xl text-muted-foreground font-medium">/{quiz.length}</span></div>
           <div className="w-full h-3 bg-secondary rounded-full overflow-hidden border border-border">
             <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1, ease: "easeOut" }} className={`h-full rounded-full ${pct >= 70 ? "bg-green-500" : "bg-orange-500"}`} />
@@ -170,7 +170,7 @@ const QuizTab = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full border-4 border-primary border-r-transparent flex items-center justify-center">
-                <span className="text-[10px] font-black">{Math.round(((current) / quiz.length) * 100)}%</span>
+                  <span className="text-[10px] font-semibold">{Math.round(((current) / quiz.length) * 100)}%</span>
             </div>
             <div>
                 <h3 className="text-xs font-bold">Quiz Progress</h3>
@@ -195,7 +195,7 @@ const QuizTab = ({
             <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowShortcuts(!showShortcuts)}
+              onClick={() => setShowShortcuts(!showShortcuts)}
                 className={cn(
                     "h-8 px-2 rounded-lg bg-secondary border border-border transition-colors",
                     showShortcuts && "bg-primary text-primary-foreground"
@@ -206,7 +206,7 @@ const QuizTab = ({
             <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={handleRestart}
+              onClick={handleRestart}
                 className="h-8 w-8 p-0 rounded-lg bg-secondary border border-border"
             >
                 <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
@@ -214,7 +214,7 @@ const QuizTab = ({
             <Button 
                 variant="ghost" 
                 size="sm" 
-                disabled={isGenerating}
+              disabled={isGenerating}
                 onClick={() => onGenerateMore?.()}
                 className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold gap-1.5"
             >
@@ -299,7 +299,7 @@ const QuizTab = ({
            <Button 
              variant="outline" 
              size="sm" 
-             onClick={() => onAIAction?.('quiz_hint', q.question)}
+              onClick={() => onAIAction?.('quiz_hint', q.question)}
              className="h-8 rounded-full text-[10px] font-bold gap-1.5 border-indigo-100/50 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20"
            >
              <Lightbulb className="h-3 w-3" /> Hint

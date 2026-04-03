@@ -62,16 +62,11 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-none bg-card/80 backdrop-blur-2xl rounded-[32px] shadow-2xl ring-1 ring-foreground/5">
-        <div className="relative">
-          {/* Decorative background element */}
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-green-500/10 rounded-full blur-3xl pointer-events-none" />
-          
-          <div className="p-8 space-y-8 relative z-10">
-            <DialogHeader className="space-y-3">
+      <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border border-border/70 bg-card backdrop-blur-xl rounded-[28px] shadow-xl">
+        <div className="relative p-8 space-y-8">
+          <DialogHeader className="space-y-3">
               <div className="flex justify-center mb-2">
-                <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-xl shadow-primary/20 transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+                <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-sm">
                   <span className="text-primary-foreground font-black text-xl">TB</span>
                 </div>
               </div>
@@ -90,7 +85,7 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
               <div className="grid grid-cols-2 gap-4">
                 <Button 
                   variant="outline" 
-                  className="rounded-2xl h-14 gap-3 border-border bg-card hover:bg-secondary hover:border-muted-foreground/30 transition-all font-bold shadow-sm" 
+                  className="rounded-2xl h-14 gap-3 border-border/70 bg-background hover:bg-secondary transition-all font-medium shadow-none" 
                   onClick={() => handleOAuth("google")}
                 >
                   <Google className="h-4 w-4" />
@@ -98,7 +93,7 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="rounded-2xl h-14 gap-3 border-border bg-card hover:bg-secondary hover:border-muted-foreground/30 transition-all font-bold shadow-sm" 
+                  className="rounded-2xl h-14 gap-3 border-border/70 bg-background hover:bg-secondary transition-all font-medium shadow-none" 
                   onClick={() => handleOAuth("github")}
                 >
                   <Github className="h-4 w-4" />
@@ -108,10 +103,10 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
 
               <div className="relative py-2">
                 <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
+                  <span className="w-full border-t border-border/70" />
                 </div>
                 <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
-                  <span className="bg-card/50 backdrop-blur-sm px-4 text-muted-foreground/50">Or continue with email</span>
+                  <span className="bg-card px-4 text-muted-foreground/50">Or continue with email</span>
                 </div>
               </div>
               
@@ -134,7 +129,7 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
                           value={name} 
                           onChange={e => setName(e.target.value)} 
                           required 
-                          className="rounded-2xl h-14 border-border bg-secondary/30 px-6 font-bold focus:bg-background focus:ring-primary transition-all" 
+                          className="rounded-2xl h-14 border-border/70 bg-background px-6 font-medium focus:bg-background focus:ring-primary transition-all" 
                         />
                       </div>
                     )}
@@ -147,7 +142,7 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
                         required 
-                        className="rounded-2xl h-14 border-border bg-secondary/30 px-6 font-bold focus:bg-background focus:ring-primary transition-all" 
+                        className="rounded-2xl h-14 border-border/70 bg-background px-6 font-medium focus:bg-background focus:ring-primary transition-all" 
                       />
                     </div>
                     <div className="space-y-2">
@@ -159,7 +154,7 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
                         required 
-                        className="rounded-2xl h-14 border-border bg-secondary/30 px-6 font-bold focus:bg-background focus:ring-primary transition-all" 
+                        className="rounded-2xl h-14 border-border/70 bg-background px-6 font-medium focus:bg-background focus:ring-primary transition-all" 
                       />
                     </div>
                   </motion.div>
@@ -167,7 +162,7 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
 
                 <Button 
                   type="submit" 
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 rounded-[20px] h-14 font-black text-sm shadow-xl shadow-primary/10 mt-2 active:scale-[0.98] transition-all" 
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 rounded-[20px] h-14 font-semibold text-sm shadow-sm mt-2 active:scale-[0.98] transition-all" 
                   disabled={isLoading}
                 >
                   {isLoading ? "Synchronizing..." : mode === "login" ? "Sign In" : "Get Started"}
@@ -184,7 +179,6 @@ export function AuthDialog({ onSuccess, trigger }: { onSuccess?: () => void; tri
                 </button>
               </p>
             </div>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

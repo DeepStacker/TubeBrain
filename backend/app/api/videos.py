@@ -4,7 +4,7 @@ import os
 import tempfile
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,6 +107,8 @@ async def analyze_videos(
 @router.post("/upload", response_model=VideoUploadResponse)
 async def upload_video(
     file: UploadFile = File(...),
+    style: str = Form("detailed"),
+    expertise: str = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -149,12 +151,15 @@ async def upload_video(
     # Enqueue processing
     from app.workers.tasks import enqueue_upload_processing
 
+    # Determine expertise
+    final_expertise = expertise or (user.settings.get("expertise", "intermediate") if user.settings else "intermediate")
+
     # Create an initial analysis record for polling
     analysis = Analysis(
         video_id=video.id,
         user_id=user.id,
-        expertise_level=user.settings.expertise if user.settings else "intermediate",
-        style="detailed",
+        expertise_level=final_expertise,
+        style=style,
         ai_provider=settings.DEFAULT_AI_PROVIDER,
         ai_model=settings.DEFAULT_AI_MODEL,
         status="queued",

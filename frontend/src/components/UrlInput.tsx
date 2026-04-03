@@ -23,6 +23,7 @@ interface UrlInputProps {
   onUploadComplete?: (videoId: string, analysisId: string) => void;
   analysisStyle?: string;
   onStyleChange?: (style: string) => void;
+  expertise?: string;
 }
 
 const ANALYSIS_STYLES = [
@@ -34,7 +35,7 @@ const ANALYSIS_STYLES = [
   { id: "Study Guide", label: "Study Guide", desc: "Exam preparation" },
 ];
 
-const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", onStyleChange }: UrlInputProps) => {
+const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", onStyleChange, expertise = "intermediate" }: UrlInputProps) => {
   const [url, setUrl] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -64,6 +65,8 @@ const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", o
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("style", analysisStyle || "Detailed");
+      formData.append("expertise", expertise);
 
       const token = getAuthToken();
       
@@ -235,20 +238,18 @@ const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", o
             onClick={() => handleActionClick(action.title)}
             aria-label={action.title}
             className={cn(
-              "flex flex-col items-center justify-center p-6 rounded-[40px] bg-card border border-border shadow-sm hover:shadow-2xl hover:shadow-foreground/5 hover:border-primary transition-all group aspect-square relative overflow-hidden",
+              "flex flex-col items-center justify-center p-5 rounded-[28px] bg-card border border-border/70 shadow-sm hover:border-border hover:shadow-md transition-all group aspect-square relative overflow-hidden",
               (action.title === "Record" && isRecording) && "border-red-500/50 bg-red-500/5"
             )}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            
             <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 mb-4 z-10",
+              "w-11 h-11 rounded-xl flex items-center justify-center transition-colors mb-4 z-10",
               (action.title === "Record" && isRecording) ? "bg-red-500 text-white" : "bg-secondary text-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:rotate-6"
             )}>
               {action.icon}
             </div>
-            <span className="text-sm font-bold text-foreground z-10">{action.title}</span>
-            <span className="text-[10px] text-muted-foreground mt-1.5 text-center line-clamp-1 z-10 font-medium">
+            <span className="text-sm font-semibold text-foreground z-10">{action.title}</span>
+            <span className="text-[10px] text-muted-foreground mt-1.5 text-center line-clamp-1 z-10">
               {action.title === "Upload" && isUploading ? `${uploadProgress}%` : action.desc}
             </span>
             {action.title === "Upload" && isUploading && (
@@ -276,7 +277,7 @@ const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", o
         {urls.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {urls.map((u, i) => (
-              <div key={i} className="flex items-center gap-2 bg-secondary px-3 py-1.5 rounded-xl text-xs font-bold border border-border text-muted-foreground">
+              <div key={i} className="flex items-center gap-2 bg-secondary/70 px-3 py-1.5 rounded-full text-xs font-medium border border-border/70 text-muted-foreground">
                 <LinkIcon className="h-3 w-3" />
                 <span className="truncate max-w-[200px]">{u}</span>
                 <button onClick={() => removeUrl(i)} className="hover:text-destructive transition-colors">
@@ -290,16 +291,16 @@ const UrlInput = ({ onSubmit, isLoading, onUploadComplete, analysisStyle = "", o
         <div className="relative group">
           <form
             onSubmit={handleSubmit}
-            className="relative flex items-center bg-card border border-border rounded-[32px] px-6 h-16 shadow-sm focus-within:shadow-md focus-within:border-primary/50 transition-all gap-4"
+            className="relative flex items-center gap-4 rounded-[28px] border border-border/70 bg-card px-5 h-14 shadow-sm transition-all focus-within:border-border focus-within:shadow-md"
           >
-            <Search className="h-5 w-5 text-muted-foreground/50" />
+            <Search className="h-5 w-5 text-muted-foreground/50 shrink-0" />
             <input
               type="text"
               value={url}
               onChange={e => setUrl(e.target.value)}
               disabled={isLoading}
               placeholder="Learn anything"
-              className="flex-1 bg-transparent text-lg focus:outline-none placeholder:text-muted-foreground/30 font-medium"
+              className="flex-1 bg-transparent text-base focus:outline-none placeholder:text-muted-foreground/30"
             />
             
             <button

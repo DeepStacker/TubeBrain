@@ -19,6 +19,9 @@ export const STORAGE_KEYS = {
   USER_NAME: "user_name",
   USER_EMAIL: "user_email",
   USER_BALANCE: "user_balance",
+  ACTIVE_VIEW: "youlearn_active_view",
+  ACTIVE_ANALYSIS_ID: "youlearn_active_analysis_id",
+  SIDEBAR_COLLAPSED: "youlearn_sidebar_collapsed",
 } as const;
 
 /** Limits */

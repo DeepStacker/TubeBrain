@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, PlusCircle, GraduationCap } from "lucide-react";
+import { X, PlusCircle, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
 import { BottomNav } from "@/components/BottomNav";
@@ -37,7 +37,10 @@ export function AppLayout() {
   const { spaces, handleCreateNewSpace } = useSpacesContext();
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden font-sans text-foreground">
+    <div className="flex h-screen overflow-hidden bg-background font-sans text-foreground relative">
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_top_left,rgba(0,0,0,0.03),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(0,0,0,0.02),transparent_32%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.035),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.02),transparent_30%)]" />
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
+
       {/* Sidebar - Desktop */}
       {!isFocusMode && (
         <Sidebar 
@@ -49,6 +52,7 @@ export function AppLayout() {
           onCreateSpace={handleCreateNewSpace}
           credits={credits} 
           onAuthSuccess={() => {}} 
+          className="relative z-10"
         />
       )}
 
@@ -56,56 +60,59 @@ export function AppLayout() {
       <main 
         id="main-content"
         className={cn(
-          "flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out relative"
+          "flex-1 flex flex-col min-w-0 relative z-10"
         )}
       >
-        {/* Global Nav / Header - Portal Style */}
+        {/* Global Nav / Header - Premium Glass */}
         {!isFocusMode && (
           <motion.div 
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="h-16 border-b border-border bg-background/70 backdrop-blur-xl sticky top-0 z-40 shrink-0 flex items-center transition-all px-6"
+            className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-border/60 bg-background/85 px-6 backdrop-blur-xl"
           >
-            <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
+            <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
               <div className="flex items-center gap-4 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                       <PlusCircle className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="flex flex-col">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50 leading-none mb-1">
-                        {activeAnalysisId && videoData ? "Deep Analysis" : "Portal"}
-                      </p>
-                      <h1 className="text-sm font-bold text-foreground truncate max-w-[200px] md:max-w-[400px]">
-                        {activeAnalysisId && videoData ? videoData.title : "Dashboard"}
-                      </h1>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-card">
+                    <PlusCircle className="h-4.5 w-4.5 text-foreground" />
                   </div>
+                  <div className="flex min-w-0 flex-col">
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                      {activeAnalysisId && videoData ? "Analysis" : "Workspace"}
+                    </p>
+                    <h1 className="max-w-[220px] truncate text-sm font-semibold tracking-tight text-foreground md:max-w-[420px]">
+                      {activeAnalysisId && videoData ? videoData.title : "Dashboard"}
+                    </h1>
+                  </div>
+                </div>
               </div>
               
               <div className="flex items-center gap-3 shrink-0">
+                  <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground lg:flex">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/80" />
+                    Ready
+                  </div>
+
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => setIsFocusMode(!isFocusMode)}
                     className={cn(
-                      "rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest transition-all gap-2 border border-border shadow-sm",
+                      "h-9 gap-2 rounded-full border border-border/70 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all",
                       isFocusMode 
                         ? "bg-primary text-primary-foreground hover:bg-primary/90 border-transparent" 
-                        : "bg-background text-muted-foreground hover:bg-secondary/80"
+                        : "bg-background text-muted-foreground hover:bg-secondary"
                     )}
                   >
                     <GraduationCap className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">{isFocusMode ? "Exit Focus" : "Focus Mode"}</span>
                   </Button>
 
-                  <div className="w-[1px] h-6 bg-border mx-1" />
-
                   <Button
                     variant="default"
                     size="sm"
                     onClick={() => setIsTopUpOpen(true)}
-                    className="rounded-xl h-9 px-5 text-[10px] font-black uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20"
+                    className="h-9 rounded-full bg-foreground px-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-background hover:bg-foreground/90"
                   >
                     Upgrade
                   </Button>
@@ -129,7 +136,7 @@ export function AppLayout() {
             >
               <Button
                 onClick={() => setIsFocusMode(false)}
-                className="rounded-full h-12 px-8 bg-primary text-primary-foreground shadow-2xl hover:bg-primary/90 font-black text-xs uppercase tracking-[0.2em] border border-primary-foreground/20 backdrop-blur-sm group"
+                className="group h-12 rounded-full border border-primary-foreground/20 bg-primary px-8 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-xl backdrop-blur-sm hover:bg-primary/90"
               >
                 <X className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
                 Exit Focus Mode
