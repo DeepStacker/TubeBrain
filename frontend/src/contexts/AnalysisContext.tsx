@@ -82,7 +82,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [analysisStyle, setAnalysisStyle] = useState("");
   const [userNotes, setUserNotes] = useState("");
   const [isNotesSaving, setIsNotesSaving] = useState(false);
-  
+  const [dataRefreshTrigger, setDataRefreshTrigger] = useState(0);  // Trigger for forcing component updates
+
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const pollingAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -95,6 +96,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     let finalData = null;
     let attempts = 0;
     let transcriptLoaded = false;
+    let lastChaptersJson = JSON.stringify([{"time": "0:00", "label": "Video Content"}]);  // Track last seen chapters
 
     while (!allDataComplete && attempts < POLL_MAX_ATTEMPTS) {
       attempts++;
@@ -169,38 +171,141 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
             transcriptLoaded = true;
             finalData = data;
-            logger.info("✅ Phase 1 complete: UI updated with transcript + chapters + metadata");
 
-            // Exit polling - All extraction done
-            // User can now optionally generate AI tools on-demand
-            allDataComplete = true;
+            // Track initial chapters for background update detection
+            lastChaptersJson = JSON.stringify(data.analysis?.timestamps || []);
+
+            logger.info("✅ Phase 1 complete: UI updated with transcript + chapters + metadata", {
+              initial_chapters: lastChaptersJson,
+              attempts: attempts
+            });
+
+            // DON'T exit polling yet - continue to check for background chapter generation updates
+            // Keep polling for up to 40 attempts (40 seconds) to catch AI-generated chapters
           } catch (e) {
             logger.warn("Failed to load transcript at Phase 1 completion:", e);
             continue;  // Retry on next poll
           }
         }
 
-        // PHASE 2: Manual tool generation (user clicks Generate Quiz, etc.)
-        // This is only reached if user generates tools and polling resumes
-        // Progress remains at 100% since extraction is complete
-        if (transcriptLoaded && statusData.progress_percentage === 100 && statusData.status === "completed") {
+        // BACKGROUND CHAPTER UPDATE: Keep checking after Phase 1 for improved chapters
+        if (transcriptLoaded && statusData.progress_percentage === 100 && statusData.status === "completed" && attempts < 40) {
           try {
             const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
               signal
             });
-            const updatedData = await detailRes.json();
-
-            // Check if new AI tools are available
-            if (updatedData.analysis) {
-              const { summaryData } = transformBackendAnalysis(updatedData);
-              setSummaryData(summaryData);
-              logger.info("Manual tool generation complete: AI tools updated");
+            if (!detailRes.ok) {
+              continue;
             }
+            const updatedData = await detailRes.json();
+            const currentChapters = updatedData.analysis?.timestamps || [];
+            const currentChaptersJson = JSON.stringify(currentChapters);
 
-            allDataComplete = true;
+            // Check if chapters were updated (not just default anymore)
+            const hasRealChapters = (
+              currentChapters.length > 0 &&
+              !(
+                currentChapters.length === 1 &&
+                currentChapters[0]?.label === "Video Content"
+              )
+            );
+
+            logger.debug("Background chapter check:", {
+              attempt: attempts,
+              chapters_count: currentChapters.length,
+              has_real_chapters: hasRealChapters,
+              first_chapter: currentChapters[0],
+              chapters_changed: currentChaptersJson !== lastChaptersJson
+            });
+
+            if (hasRealChapters && currentChaptersJson !== lastChaptersJson) {
+              // Real chapters found AND different from last seen chapters - update UI
+              logger.info("🎯 Chapters updated! AI generation complete", {
+                old_chapters: lastChaptersJson,
+                new_chapters: currentChaptersJson,
+                attempt: attempts
+              });
+
+              // CRITICAL: Do a complete data re-fetch and re-set to guarantee UI update
+              try {
+                const fullRes = await apiFetch(`/api/analysis/${analysisId}`, { signal });
+                if (fullRes.ok) {
+                  const fullData = await fullRes.json();
+
+                  // Transform fresh data
+                  const { videoData: newVideoData, summaryData: newSummaryData, metadata: newMetadata } = transformBackendAnalysis(fullData);
+
+                  // Create brand new state object
+                  const completeState = {
+                    summary: {
+                      overview: newSummaryData.overview || "",
+                      keyPoints: (newSummaryData.keyPoints || []).map(kp => ({ ...kp })),
+                      takeaways: (newSummaryData.takeaways || []).map(t => ({ ...t })),
+                      timestamps: (newSummaryData.timestamps || []).map(ts => ({ time: ts.time, label: ts.label })),
+                      tags: (newSummaryData.tags || []).map(tag => String(tag)),
+                      quiz: newSummaryData.quiz,
+                      roadmap: newSummaryData.roadmap,
+                      mind_map: newSummaryData.mind_map,
+                      flashcards: newSummaryData.flashcards,
+                      transcript_segments: (newSummaryData.transcript_segments || []).map(seg => ({...seg})),
+                      learning_context: newSummaryData.learning_context,
+                      glossary: (newSummaryData.glossary || []).map(g => ({...g})),
+                      resources: (newSummaryData.resources || []).map(r => ({...r}))
+                    }
+                  };
+
+                  logger.info("🔄 CRITICAL: Executing complete state refresh", {
+                    timestamps: completeState.summary.timestamps.length,
+                    labels: completeState.summary.timestamps.map(t => t.label)
+                  });
+
+                  // Set all state in one operation - use setTimeout to ensure React batching works
+                  setTimeout(() => {
+                    setTranscript(fullData.transcript_text || finalData.transcript_text);
+                    setVideoData({
+                      title: newVideoData.title,
+                      channel: newVideoData.channel,
+                      duration: newVideoData.duration,
+                      views: newVideoData.views,
+                      likes: newVideoData.likes,
+                      published: newVideoData.published
+                    });
+                    setSummaryData(completeState.summary);
+                    setMetadata({
+                      title: newMetadata.title,
+                      channel: newMetadata.channel,
+                      duration: newMetadata.duration,
+                      thumbnails: newMetadata.thumbnails
+                    });
+                    // Increment refresh trigger to force all subscribers to update
+                    setDataRefreshTrigger(prev => prev + 1);
+                  }, 0);
+
+                  // Trigger force update by updating analysis progress which causes cascade
+                  setAnalysisProgress(100);
+                  setAnalysisStatus("completed");
+
+                  logger.info("✅ STATE FULLY REFRESHED - Chapters should be visible now!");
+
+                  lastChaptersJson = currentChaptersJson;
+                  allDataComplete = true;
+                } else {
+                  logger.warn("Failed to fetch fresh data for chapter update");
+                }
+              } catch (error) {
+                logger.error("Error fetching fresh data:", error);
+              }
+            } else if (attempts >= 40) {
+              // Timeout reached - exit polling
+              logger.info("Stopped polling for background chapters (40s timeout)");
+              allDataComplete = true;
+            }
           } catch (e) {
-            logger.warn("Failed to load updated data at 100%:", e);
+            logger.debug("Background chapter check failed:", e);
           }
+        } else if (transcriptLoaded && attempts >= 40) {
+          // Exit if timeout reached
+          allDataComplete = true;
         } else if (statusData.status === "failed") {
           setAnalysisStatus("failed");
           throw new Error(statusData.error || "Analysis task failed");
