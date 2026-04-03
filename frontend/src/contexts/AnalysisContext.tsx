@@ -91,11 +91,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     vIds: string[],
     signal?: AbortSignal
   ): Promise<any> => {
-    let completed = false;
-    let data = null;
+    let allDataComplete = false;
+    let finalData = null;
     let attempts = 0;
-    
-    while (!completed && attempts < POLL_MAX_ATTEMPTS) {
+    let transcriptLoaded = false;
+
+    while (!allDataComplete && attempts < POLL_MAX_ATTEMPTS) {
       attempts++;
 
       // Wait with cancellation support
@@ -136,14 +137,47 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           setEstimatedRemaining(statusData.estimated_remaining_seconds);
         }
 
-        if (statusData.status === "completed") {
-          const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
-            signal
-          });
-          data = await detailRes.json();
-          completed = true;
-          setAnalysisProgress(100);
-          setAnalysisStatus("completed");
+        // PHASE 1: Transcript ready at 50% progress
+        if (statusData.progress_percentage === 50 && !transcriptLoaded && statusData.status === "completed") {
+          try {
+            const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
+              signal
+            });
+            const data = await detailRes.json();
+
+            const { videoData, summaryData, metadata } = transformBackendAnalysis(data);
+            const finalVideoIds = [data.video.platform_id || vIds[0]];
+
+            setVideoIds(finalVideoIds);
+            setVideoData(videoData);
+            setTranscript(data.transcript_text || null);
+            setMetadata(metadata);
+
+            transcriptLoaded = true;
+            finalData = data;
+            logger.info("Phase 1 complete: Transcript loaded at 50% progress");
+
+            // Don't mark as complete yet - continue polling for Phase 2
+            setAnalysisStatus("completed");
+          } catch (e) {
+            logger.warn("Failed to load transcript at 50%:", e);
+          }
+        }
+
+        // PHASE 2: All synthesis complete at 100% progress
+        if (statusData.progress_percentage === 100 && statusData.status === "completed") {
+          try {
+            const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
+              signal
+            });
+            finalData = await detailRes.json();
+            allDataComplete = true;
+            setAnalysisProgress(100);
+            setAnalysisStatus("completed");
+            logger.info("Phase 2 complete: All AI synthesis ready at 100% progress");
+          } catch (e) {
+            logger.warn("Failed to load final data at 100%:", e);
+          }
         } else if (statusData.status === "failed") {
           setAnalysisStatus("failed");
           throw new Error(statusData.error || "Analysis task failed");
@@ -157,22 +191,22 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (data) {
-      const { videoData, summaryData, metadata, videoIds: transformedVideoIds } = transformBackendAnalysis(data);
+    if (finalData && transcriptLoaded) {
+      const { videoData, summaryData, metadata } = transformBackendAnalysis(finalData);
 
       // Use platform_id preferentially, fallback to first provided videoId
-      const finalVideoIds = [data.video.platform_id || vIds[0]];
+      const finalVideoIds = [finalData.video.platform_id || vIds[0]];
 
       setVideoIds(finalVideoIds);
       setVideoData(videoData);
       setSummaryData(summaryData);
-      setTranscript(data.transcript_text || null);
+      setTranscript(finalData.transcript_text || null);
       setMetadata(metadata);
 
       // History is saved on backend, but we might want to refresh local history too
       refreshHistory();
     }
-    return data;
+    return finalData;
   }, [refreshHistory]);
 
   const handleSubmit = useCallback(async (urls: string[], options: any = {}) => {

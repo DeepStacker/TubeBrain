@@ -293,8 +293,8 @@ export default function AnalysisPage() {
 
               {/* Content States: Loading, Summary, or Empty */}
               <AnimatePresence mode="wait">
-                {isLoading || (activeAnalysisId && !summaryData) ? (
-                  <motion.div 
+                {isLoading || (activeAnalysisId && !transcript && !summaryData) ? (
+                  <motion.div
                     key="loading"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -303,14 +303,14 @@ export default function AnalysisPage() {
                   >
                     <div className="bg-card/50 backdrop-blur-xl border border-border p-10 md:p-16 rounded-[3rem] shadow-2xl shadow-foreground/5 relative overflow-hidden group">
                       <div className="absolute top-0 left-0 w-full h-1 bg-secondary overflow-hidden">
-                        <motion.div 
+                        <motion.div
                           initial={{ x: "-100%" }}
                           animate={{ x: "100%" }}
                           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                           className="w-1/2 h-full bg-primary"
                         />
                       </div>
-                      
+
                       <div className="flex flex-col md:flex-row md:items-end justify-between gap-10 mb-16">
                          <div className="space-y-4">
                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">
@@ -318,22 +318,31 @@ export default function AnalysisPage() {
                              <span className="text-[10px] font-black uppercase tracking-widest">Genius AI Active</span>
                            </div>
                            <h2 className="text-4xl md:text-5xl font-black text-foreground tracking-tight leading-[1.1]">
-                             Synthesizing <br /> <span className="text-muted-foreground/40">Knowledge.</span>
+                             {analysisProgress >= 50 && analysisProgress < 100 ? (
+                               <>Extracting <br /> <span className="text-muted-foreground/40">Knowledge...</span></>
+                             ) : (
+                               <>Synthesizing <br /> <span className="text-muted-foreground/40">Knowledge.</span></>
+                             )}
                            </h2>
                            <div className="flex items-center gap-4">
                              <div className="flex items-center gap-2">
-                               <div className={cn("h-2.5 w-2.5 rounded-full animate-pulse", analysisProgress < 30 ? "bg-amber-500" : analysisProgress < 70 ? "bg-blue-500" : "bg-emerald-500")} />
+                               <div className={cn("h-2.5 w-2.5 rounded-full animate-pulse", analysisProgress < 30 ? "bg-amber-500" : analysisProgress < 50 ? "bg-blue-500" : analysisProgress < 100 ? "bg-emerald-500" : "bg-emerald-500")} />
                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] opacity-60">
-                                 {analysisProgress < 20 ? "Pre-processing" : 
-                                  analysisProgress < 50 ? "Transcript Extraction" : 
-                                  analysisProgress < 80 ? "AI Analysis" : 
-                                  "Finalizing Insights"}
+                                 {analysisProgress < 20 ? "Pre-processing" :
+                                  analysisProgress < 50 ? "PHASE 1: Transcript Extraction" :
+                                  analysisProgress < 100 ? "PHASE 2: AI Analysis (Background)" :
+                                  "Analysis Complete"}
                                </span>
                              </div>
                            </div>
+                           {analysisProgress >= 50 && analysisProgress < 100 && (
+                             <p className="text-xs text-muted-foreground/60 leading-relaxed">
+                               ✓ Transcript ready. AI synthesis continues in the background...
+                             </p>
+                           )}
                          </div>
                          <div className="text-left md:text-right shrink-0">
-                           <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em] mb-2">Synthesis Progress</p>
+                           <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.3em] mb-2">{analysisProgress >= 50 && analysisProgress < 100 ? "Phase 2 Progress" : "Synthesis Progress"}</p>
                            <div className="flex items-baseline md:justify-end gap-1">
                              <span className="text-7xl font-black leading-none text-foreground tracking-tighter">{analysisProgress}</span>
                              <span className="text-2xl font-black text-muted-foreground/20">%</span>
@@ -342,7 +351,7 @@ export default function AnalysisPage() {
                       </div>
 
                       <div className="relative h-3 w-full bg-secondary/50 rounded-full overflow-hidden mb-12">
-                         <motion.div 
+                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${analysisProgress}%` }}
                           transition={{ type: "spring", damping: 20 }}
@@ -374,7 +383,7 @@ export default function AnalysisPage() {
                       <LoadingSkeleton />
                     </div>
                   </motion.div>
-                ) : summaryData ? (
+                ) : (summaryData || transcript) ? (
                   <motion.div
                     key="summary"
                     initial={{ opacity: 0 }}
@@ -451,15 +460,15 @@ export default function AnalysisPage() {
                             />
                           </motion.div>
                         ) : (
-                          <SummaryDisplay 
-                            {...summaryData}
+                          <SummaryDisplay
+                            {...(summaryData || {})}
                             activeTab={activeSidebarTab === TOOL_IDS.TRANSCRIPT ? 'transcripts' : (activeSidebarTab === TOOL_IDS.CHAPTERS ? 'chapters' : 'chapters')}
                             onTabChange={(tab) => {
                               const tabId = tab === 'chapters' ? TOOL_IDS.CHAPTERS : TOOL_IDS.TRANSCRIPT;
                               handleOpenTab(tabId);
                             }}
                             transcript={transcript}
-                            transcript_segments={summaryData.transcript_segments}
+                            transcript_segments={summaryData?.transcript_segments}
                             onTimestampClick={handleTimestampClick}
                             spaces={spaces}
                             onAddToSpace={handleAddToSpace}
