@@ -1192,18 +1192,34 @@ async def extract_metadata(video_id: str) -> dict:
                 
                 # 4. ytInitialPlayerResponse JSON (THE HIGH-TRUST LANE)
                 if not title or duration == 0:
-                    json_match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html_content)
-                    if json_match:
-                        try:
-                            player_data = json.loads(json_match.group(1))
-                            video_details = player_data.get("videoDetails", {})
-                            title = video_details.get("title", title)
-                            duration = int(video_details.get("lengthSeconds", duration))
-                            thumbnail_url = video_details.get("thumbnail", {}).get("thumbnails", [{"url": thumbnail_url}])[-1].get("url")
-                            logger.info(f"Metadata Lane 3 (JSON-Scrape) Success: {title} ({duration}s)")
-                        except: pass
+                    # More robust regex for ytInitialPlayerResponse
+                    j_patterns = [
+                        r'ytInitialPlayerResponse\s*=\s*({.+?});',
+                        r'ytInitialPlayerResponse\s*=\s*({.+?})\s*</script>',
+                        r'window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});'
+                    ]
+                    for jp in j_patterns:
+                        json_match = re.search(jp, html_content)
+                        if json_match:
+                            try:
+                                player_data = json.loads(json_match.group(1))
+                                video_details = player_data.get("videoDetails", {})
+                                title = video_details.get("title", title)
+                                duration = int(video_details.get("lengthSeconds", duration))
+                                thumbnail_url = video_details.get("thumbnail", {}).get("thumbnails", [{"url": thumbnail_url}])[-1].get("url")
+                                logger.info(f"Metadata Lane 3 (JSON-Scrape) Success: {title} ({duration}s)")
+                                break
+                            except: pass
 
-                # 5. Raw Title Tag Fallback
+                # 5. Schema.org / OpenGraph / Twitter Fallbacks
+                if not title:
+                    og_match = re.search(r'<meta property="og:title" content="([^"]+)">', html_content)
+                    if og_match: title = og_match.group(1)
+                if not title:
+                    item_match = re.search(r'<link itemprop="name" content="([^"]+)">', html_content)
+                    if item_match: title = item_match.group(1)
+                
+                # 6. Raw Title Tag Fallback
                 if not title:
                     r_match = re.search(r'<title>([^<]+)</title>', html_content)
                     if r_match: title = r_match.group(1).replace(" - YouTube", "")
@@ -1216,7 +1232,7 @@ async def extract_metadata(video_id: str) -> dict:
                 title = html_lib.unescape(title)
                 desc = html_lib.unescape(desc)
 
-                logger.info(f"Metadata Lane 3 (Deep-Scrape) Success for {video_id}: {title}")
+                logger.info(f"Metadata Lane 3 (Total Spectrum) Status: {title}")
                 
                 # CHAPTER EXTRACTION: Parse description for timestamps
                 chapters = []
