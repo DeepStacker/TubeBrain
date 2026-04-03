@@ -425,25 +425,33 @@ async def process_video_analysis(
             await db.commit()  # Save and return immediately
             logger.info(f"Analysis {analysis_id}: PHASE 1 complete - returned with {len(chapters)} chapters in 0 blocking time")
 
-            # BACKGROUND: Spawn async AI chapter generation (fire-and-forget)
+            # BACKGROUND: Spawn async AI chapter generation
             # Only if we used default chapters (no metadata chapters)
             if all_transcripts and len(all_transcripts) > 0 and chapters[0].get("label") == "Video Content":
                 duration_seconds = 0
                 if video and hasattr(video, 'duration_seconds'):
                     duration_seconds = video.duration_seconds or 0
 
-                # Spawn background chapter generation as pure async task
-                logger.info(f"Analysis {analysis_id}: Spawning background chapter generation (no pool)")
-                asyncio.create_task(
-                    _generate_chapters_background(
-                        analysis_id=str(analysis_id),
-                        transcript_text=all_transcripts[0],
-                        language=all_metadata[0].get('language', 'en') or 'en' if all_metadata else 'en',
-                        provider=analysis.ai_provider,
-                        model=analysis.ai_model,
-                        duration_seconds=duration_seconds,
+                logger.info(f"Analysis {analysis_id}: Starting background chapter generation...")
+
+                # Run background task with timeout to ensure it completes
+                # Give it up to 40s to finish before worker function returns
+                try:
+                    await asyncio.wait_for(
+                        _generate_chapters_background(
+                            analysis_id=str(analysis_id),
+                            transcript_text=all_transcripts[0],
+                            language=all_metadata[0].get('language', 'en') or 'en' if all_metadata else 'en',
+                            provider=analysis.ai_provider,
+                            model=analysis.ai_model,
+                            duration_seconds=duration_seconds,
+                        ),
+                        timeout=40.0  # Wait up to 40s for chapter generation
                     )
-                )
+                except asyncio.TimeoutError:
+                    logger.warning(f"Analysis {analysis_id}: Chapter generation timed out in worker")
+                except Exception as e:
+                    logger.error(f"Analysis {analysis_id}: Chapter generation error: {e}")
 
             # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
             # Phase 1 now returns at 100% (~8-15s) with transcript + chapters (metadata or default)
