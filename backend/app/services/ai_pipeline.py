@@ -835,6 +835,55 @@ async def _stream_ai(provider: str, model: str, messages: list[dict]) -> AsyncGe
                     continue
 
 
+async def generate_chapters_from_transcript(
+    transcript_text: str,
+    language: str = "en",
+    provider: str = None,
+    model: str = None,
+    duration_seconds: int = 0,
+) -> list[dict]:
+    """
+    Generate chapter markers from a transcript using AI.
+
+    Returns list of chapters: [{"time": "M:SS", "label": "Chapter title"}, ...]
+    """
+    try:
+        # Truncate if too long
+        max_tokens = 8000
+        truncated_text = _truncate_to_tokens(transcript_text, max_tokens)
+
+        system_prompt = MINIMAL_SYSTEM_PROMPT_TEMPLATE.format(language=language)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Transcript:\n\n{truncated_text}"},
+        ]
+
+        # Use provider/model passed in, or defaults
+        if not provider:
+            provider = settings.DEFAULT_AI_PROVIDER
+        if not model:
+            model = settings.DEFAULT_AI_MODEL
+
+        logger.info(f"Generating chapters with {provider}/{model}")
+        response = await _call_ai_with_fallback(provider, model, messages, require_json=True)
+
+        # Parse JSON response
+        data = json.loads(response)
+        chapters = data.get("timestamps", [])
+
+        logger.info(f"Generated {len(chapters)} chapters")
+        return chapters
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse chapter generation response: {e}")
+        # Return default chapter at 0:00
+        return [{"time": "0:00", "label": "Video Content"}]
+    except Exception as e:
+        logger.error(f"Chapter generation failed: {e}", exc_info=True)
+        # Return default chapter at 0:00
+        return [{"time": "0:00", "label": "Video Content"}]
+
+
 def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     """Truncate text to approximately max_tokens."""
     if _encoder:

@@ -282,17 +282,52 @@ async def process_video_analysis(
             phase1_elapsed = time.time() - start_time
             logger.info(f"Analysis {analysis_id}: PHASE 1 complete in {phase1_elapsed:.1f}s (transcripts: {len(all_transcripts)}, metadata: {len(all_metadata)})")
 
-            # MARK ANALYSIS AS COMPLETE (100% - all extraction done) + STORE CHAPTERS
+            # MARK ANALYSIS AS COMPLETE (100% - all extraction done) + GENERATE + STORE CHAPTERS
             analysis.status = "completed"  # Mark as ready - all extraction finished
             analysis.progress_percentage = 100
-            analysis.status_message = "Transcript and metadata ready. AI tools available on-demand."
+            analysis.status_message = "Transcript and chapters ready. AI tools available on-demand."
 
-            # STORE CHAPTERS FROM METADATA (from Phase 1)
+            # GENERATE CHAPTERS FROM TRANSCRIPT (Phase 1 task)
+            chapters = []
+
+            # Try to get chapters from metadata first
             if all_metadata and len(all_metadata) > 0:
                 primary_metadata = all_metadata[0]
-                # Store chapters/timestamps from metadata so they're immediately available
-                if primary_metadata.get("chapters"):
-                    analysis.timestamps = primary_metadata.get("chapters")
+                if primary_metadata.get("chapters") and len(primary_metadata.get("chapters", [])) > 0:
+                    chapters = primary_metadata.get("chapters")
+                    logger.info(f"Analysis {analysis_id}: Using {len(chapters)} chapters from metadata")
+
+            # If no metadata chapters, generate them from transcript using AI
+            if not chapters and all_transcripts and len(all_transcripts) > 0:
+                try:
+                    from app.services.ai_pipeline import generate_chapters_from_transcript
+                    transcript_text = all_transcripts[0]
+
+                    # Generate chapters with 5s timeout
+                    chapter_gen_start = time.time()
+                    chapters = await asyncio.wait_for(
+                        generate_chapters_from_transcript(
+                            transcript_text,
+                            language=getattr(video, 'language', 'en') if video else 'en',
+                            provider=analysis.ai_provider,
+                            model=analysis.ai_model,
+                            duration_seconds=video.duration_seconds if video else 0,
+                        ),
+                        timeout=5.0
+                    )
+                    chapter_gen_elapsed = time.time() - chapter_gen_start
+                    logger.info(f"Analysis {analysis_id}: Generated {len(chapters)} chapters in {chapter_gen_elapsed:.1f}s")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Analysis {analysis_id}: Chapter generation timed out (5s)")
+                    chapters = [{"time": "0:00", "label": "Video Content"}]
+                except Exception as e:
+                    logger.error(f"Analysis {analysis_id}: Chapter generation failed: {e}")
+                    chapters = [{"time": "0:00", "label": "Video Content"}]
+
+            # Store chapters in analysis
+            if chapters:
+                analysis.timestamps = chapters
+                logger.info(f"Analysis {analysis_id}: Stored {len(chapters)} chapters/timestamps")
 
             await db.commit()  # SAVE NOW - user gets results here regardless of Phase 2
 
