@@ -137,47 +137,67 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           setEstimatedRemaining(statusData.estimated_remaining_seconds);
         }
 
-        // PHASE 1: Transcript ready at 50% progress
-        if (statusData.progress_percentage === 50 && !transcriptLoaded && statusData.status === "completed") {
+        // PHASE 1: All extraction complete at 100% progress
+        if (statusData.progress_percentage === 100 && !transcriptLoaded && statusData.status === "completed") {
           try {
             const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
               signal
             });
+            if (!detailRes.ok) {
+              logger.warn(`Failed to fetch analysis details: ${detailRes.status}`);
+              continue;  // Retry on next poll
+            }
+
             const data = await detailRes.json();
+            logger.info("✅ Phase 1 data received:", {
+              transcript_words: data.transcript_text?.split(/\s+/).length || 0,
+              has_chapters: data.analysis?.timestamps?.length || 0,
+              status: data.analysis?.status
+            });
 
             const { videoData, summaryData, metadata } = transformBackendAnalysis(data);
             const finalVideoIds = [data.video.platform_id || vIds[0]];
 
+            // Update state immediately (this triggers UI re-render)
             setVideoIds(finalVideoIds);
             setVideoData(videoData);
             setTranscript(data.transcript_text || null);
             setMetadata(metadata);
+            setSummaryData(summaryData);
+            setAnalysisProgress(100);
+            setAnalysisStatus("completed");
 
             transcriptLoaded = true;
             finalData = data;
-            logger.info("Phase 1 complete: Transcript + Chapters loaded at 50% progress (Phase 2 is on-demand)");
+            logger.info("✅ Phase 1 complete: UI updated with transcript + chapters + metadata");
 
-            // Mark as complete since Phase 2 is now on-demand (no auto-synthesis)
-            // Polling can stop here - user will trigger AI tools manually via buttons
+            // Exit polling - All extraction done
+            // User can now optionally generate AI tools on-demand
             allDataComplete = true;
-            setAnalysisStatus("completed");
           } catch (e) {
-            logger.warn("Failed to load transcript at 50%:", e);
+            logger.warn("Failed to load transcript at Phase 1 completion:", e);
+            continue;  // Retry on next poll
           }
         }
 
-        // PHASE 2: If user manually generates tools, progress may update to 100%
-        // This handles the case where user clicks "Generate Quiz", etc.
-        if (statusData.progress_percentage === 100 && statusData.status === "completed") {
+        // PHASE 2: Manual tool generation (user clicks Generate Quiz, etc.)
+        // This is only reached if user generates tools and polling resumes
+        // Progress remains at 100% since extraction is complete
+        if (transcriptLoaded && statusData.progress_percentage === 100 && statusData.status === "completed") {
           try {
             const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
               signal
             });
-            finalData = await detailRes.json();
+            const updatedData = await detailRes.json();
+
+            // Check if new AI tools are available
+            if (updatedData.analysis) {
+              const { summaryData } = transformBackendAnalysis(updatedData);
+              setSummaryData(summaryData);
+              logger.info("Manual tool generation complete: AI tools updated");
+            }
+
             allDataComplete = true;
-            setAnalysisProgress(100);
-            setAnalysisStatus("completed");
-            logger.info("Manual tool generation complete: Progress updated to 100%");
           } catch (e) {
             logger.warn("Failed to load updated data at 100%:", e);
           }

@@ -277,15 +277,15 @@ async def process_video_analysis(
             all_transcripts = [r[0] for r in results_phase1 if r and r[0] and not isinstance(r, Exception)]
             all_metadata = [r[1] for r in results_phase1 if r and r[1] and not isinstance(r, Exception)]
 
-            # CRITICAL: Always mark Phase 1 as complete at 50%, even if some extraction failed
+            # CRITICAL: Always mark Phase 1 as complete at 100%, even if some extraction failed
             # This ensures user sees whatever we extracted (chapters from metadata)
             phase1_elapsed = time.time() - start_time
             logger.info(f"Analysis {analysis_id}: PHASE 1 complete in {phase1_elapsed:.1f}s (transcripts: {len(all_transcripts)}, metadata: {len(all_metadata)})")
 
-            # MARK ANALYSIS AS TRANSCRIPT-READY (50% complete) + STORE CHAPTERS
-            analysis.status = "completed"  # Mark as ready even if AI synthesis pending
-            analysis.progress_percentage = 50
-            analysis.status_message = "Transcript extracted. Generating AI insights..."
+            # MARK ANALYSIS AS COMPLETE (100% - all extraction done) + STORE CHAPTERS
+            analysis.status = "completed"  # Mark as ready - all extraction finished
+            analysis.progress_percentage = 100
+            analysis.status_message = "Transcript and metadata ready. AI tools available on-demand."
 
             # STORE CHAPTERS FROM METADATA (from Phase 1)
             if all_metadata and len(all_metadata) > 0:
@@ -297,11 +297,11 @@ async def process_video_analysis(
             await db.commit()  # SAVE NOW - user gets results here regardless of Phase 2
 
             # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
-            # Phase 1 now completes at 50%, user immediately sees transcript + chapters
+            # Phase 1 now completes at 100%, user immediately sees transcript + chapters + metadata
             # User can then click "Generate Quiz", "Generate Overview", etc. to request AI tools
             # This ensures fast initial load without auto-waiting for AI synthesis
 
-            logger.info(f"Analysis {analysis_id}: PHASE 1 complete - transferring to on-demand synthesis")
+            logger.info(f"Analysis {analysis_id}: PHASE 1 complete - all extraction done, AI tools on-demand")
             return  # End here - Phase 2 happens on-demand via API calls
 
         except Exception as e:
@@ -310,7 +310,7 @@ async def process_video_analysis(
                 analysis = await _get_analysis(db, analysis_id)
                 if analysis:
                     analysis.status = "completed"
-                    analysis.progress_percentage = 50
+                    analysis.progress_percentage = 100
                     analysis.error_message = str(e)[:1000]
                     await db.commit()
             except Exception:
