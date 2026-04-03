@@ -122,7 +122,7 @@ async def _generate_chapters_background(
                 model=model,
                 duration_seconds=duration_seconds,  # Pass video duration
             ),
-            timeout=120.0  # Increased to 2min for very long videos (8+ hours = 100k+ words)
+            timeout=40.0  # Optimized: 40s max (smart sampling reduces processing time)
         )
         gen_elapsed = time.time() - gen_start
 
