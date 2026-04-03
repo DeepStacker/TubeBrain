@@ -8,7 +8,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localho
 export const API_TIMEOUT_MS = 30_000;
 
 /** Polling */
-export const POLL_INTERVAL_MS = 2_000;
+export const POLL_INTERVAL_MS = 1_000;  // Changed from 2000ms to 1000ms for faster updates
 export const POLL_MAX_ATTEMPTS = 600;
 
 /** Storage keys */

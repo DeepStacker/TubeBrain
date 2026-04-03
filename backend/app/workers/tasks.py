@@ -150,9 +150,25 @@ async def process_video_analysis(
                         if match:
                             platform_id = match.group(1)
 
+                    # PARALLEL METADATA + TRANSCRIPT EXTRACTION
+                    # Both happen concurrently to maximize speed
+                    import asyncio
                     try:
-                        # Fast metadata extract
-                        metadata = await extract_metadata(platform_id)
+                        metadata, transcript_result = await asyncio.gather(
+                            extract_metadata(platform_id),
+                            transcript_engine.extract(platform_id),
+                            return_exceptions=True
+                        )
+
+                        # Handle exceptions from gather
+                        if isinstance(metadata, Exception):
+                            logger.debug(f"Metadata extraction failed: {metadata}")
+                            metadata = {}
+                        if isinstance(transcript_result, Exception):
+                            logger.error(f"Transcript extraction failed: {transcript_result}")
+                            return None, None
+
+                        # Update video with metadata
                         video.title = metadata.get("title", video.title)
                         video.channel = metadata.get("channel", video.channel)
                         video.duration_seconds = metadata.get("duration_seconds", video.duration_seconds)
@@ -160,13 +176,7 @@ async def process_video_analysis(
                         video.description = metadata.get("description", video.description)
                         await vid_db.commit()
                     except Exception as e:
-                        logger.debug(f"Metadata extraction failed: {e}")
-
-                    # FAST TRANSCRIPT EXTRACTION
-                    try:
-                        transcript_result = await transcript_engine.extract(platform_id)
-                    except Exception as e:
-                        logger.error(f"Transcript extraction failed: {e}")
+                        logger.error(f"Parallel extraction failed: {e}")
                         return None, None
 
                     # Store transcript
@@ -231,10 +241,18 @@ async def process_video_analysis(
             phase1_elapsed = time.time() - start_time
             logger.info(f"Analysis {analysis_id}: PHASE 1 complete in {phase1_elapsed:.1f}s ✓")
 
-            # MARK ANALYSIS AS TRANSCRIPT-READY (50% complete)
+            # MARK ANALYSIS AS TRANSCRIPT-READY (50% complete) + STORE CHAPTERS
             analysis.status = "completed"  # Mark as ready even if AI synthesis pending
             analysis.progress_percentage = 50
             analysis.status_message = "Transcript extracted. Generating AI insights..."
+
+            # STORE CHAPTERS FROM METADATA (from Phase 1)
+            if all_metadata and len(all_metadata) > 0:
+                primary_metadata = all_metadata[0]
+                # Store chapters/timestamps from metadata so they're immediately available
+                if primary_metadata.get("chapters"):
+                    analysis.timestamps = primary_metadata.get("chapters")
+
             await db.commit()
 
             # User gets transcript immediately at this point!
