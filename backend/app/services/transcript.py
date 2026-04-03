@@ -257,9 +257,28 @@ class TranscriptEngine:
         if winner:
             return await process_result(winner)
 
-        # INTERMEDIATE FALLBACK: Give browser extraction more time
+        # INTERMEDIATE FALLBACK: Try Jina AI for IP-blocked environments
+        # Jina AI can bypass IP blocks and extract content from cloud providers
+        logger.warning(f"[{video_id}] Main race failed, trying Jina AI bypass...")
+
+        try:
+            jina_result = await asyncio.wait_for(
+                self._try_jina_transcript(video_id),
+                timeout=8.0
+            )
+            if jina_result and jina_result.segments and len(jina_result.segments) > 0:
+                logger.info(f"[{video_id}] Jina AI extraction SUCCESS ({jina_result.word_count} words)")
+                jina_result.source = "jina_ai"
+                return await process_result(jina_result)
+            logger.debug(f"[{video_id}] Jina AI extraction returned empty")
+        except asyncio.TimeoutError:
+            logger.debug(f"[{video_id}] Jina AI extraction timed out")
+        except Exception as e:
+            logger.debug(f"[{video_id}] Jina AI extraction failed: {str(e)[:100]}")
+
+        # SECONDARY FALLBACK: Give browser extraction more time
         # Browser can extract transcripts even without official captions
-        logger.warning(f"[{video_id}] Main race failed, giving browser extraction more time...")
+        logger.warning(f"[{video_id}] Jina failed, giving browser extraction more time...")
 
         try:
             browser_result = await asyncio.wait_for(
@@ -672,6 +691,87 @@ class TranscriptEngine:
                     return await self._transcribe_single_file(comp_path, video_id, settings, report)
             return None
         except:
+            return None
+
+    async def _try_jina_transcript(self, video_id: str) -> Optional[TranscriptResult]:
+        """Try to extract transcript using Jina AI Reader (bypasses IP blocks)."""
+        try:
+            from app.config import get_settings
+            settings = get_settings()
+
+            # Jina AI Reader is free and works from cloud IPs
+            # We'll use their web reader to extract the page content
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            jina_url = f"https://r.jina.ai/{url}"
+
+            import httpx
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+            try:
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(jina_url, headers=headers)
+
+                    if resp.status_code != 200:
+                        logger.debug(f"[{video_id}] Jina AI status: {resp.status_code}")
+                        return None
+
+                    content = resp.text
+
+                    # Extract transcript lines from the Jina output
+                    # Jina returns markdown-formatted content
+                    import re
+
+                    # Look for patterns like [MM:SS] text in the content
+                    lines = content.split('\n')
+                    segments = []
+
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        # Match timestamp patterns: [MM:SS] or [H:MM:SS]
+                        ts_match = re.match(r'\[(\d+):(\d{2}):(\d{2})\]|\[(\d+):(\d{2})\]', line)
+                        if ts_match:
+                            if ts_match.group(1):  # HH:MM:SS format
+                                hours = int(ts_match.group(1))
+                                minutes = int(ts_match.group(2))
+                                seconds = int(ts_match.group(3))
+                                start_time = hours * 3600 + minutes * 60 + seconds
+                            else:  # MM:SS format
+                                minutes = int(ts_match.group(4))
+                                seconds = int(ts_match.group(5))
+                                start_time = minutes * 60 + seconds
+
+                            text = line[ts_match.end():].strip()
+                            if text:
+                                segments.append(TranscriptSegment(
+                                    start=float(start_time),
+                                    end=float(start_time + 5),
+                                    text=text
+                                ))
+
+                    if segments:
+                        full_text = " ".join([s.text for s in segments])
+                        return TranscriptResult(
+                            full_text=full_text,
+                            segments=segments,
+                            language="en",
+                            word_count=len(full_text.split())
+                        )
+
+                    logger.debug(f"[{video_id}] Jina AI: No transcript segments found in content")
+                    return None
+
+            except asyncio.TimeoutError:
+                logger.debug(f"[{video_id}] Jina AI timeout")
+                return None
+            except Exception as e:
+                logger.debug(f"[{video_id}] Jina AI request failed: {e}")
+                return None
+
+        except Exception as e:
+            logger.debug(f"[{video_id}] Jina AI extraction failed: {e}")
             return None
 
     async def _try_browser_transcript(self, video_id: str) -> Optional[TranscriptResult]:
