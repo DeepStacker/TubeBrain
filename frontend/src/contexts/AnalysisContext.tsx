@@ -189,7 +189,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         }
 
         // BACKGROUND CHAPTER UPDATE: Keep checking after Phase 1 for improved chapters
-        if (transcriptLoaded && statusData.progress_percentage === 100 && statusData.status === "completed" && attempts < 40) {
+        // For long videos (8+ hours), AI chapter generation can take up to 2 minutes
+        if (transcriptLoaded && statusData.progress_percentage === 100 && statusData.status === "completed" && attempts < 120) {
           try {
             const detailRes = await apiFetch(`/api/analysis/${analysisId}`, {
               signal
@@ -295,16 +296,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
               } catch (error) {
                 logger.error("Error fetching fresh data:", error);
               }
-            } else if (attempts >= 40) {
-              // Timeout reached - exit polling
-              logger.info("Stopped polling for background chapters (40s timeout)");
+            } else if (attempts >= 120) {
+              // Timeout reached - exit polling after 2 minutes
+              logger.info("Stopped polling for background chapters (2min timeout)");
               allDataComplete = true;
             }
           } catch (e) {
             logger.debug("Background chapter check failed:", e);
           }
-        } else if (transcriptLoaded && attempts >= 40) {
-          // Exit if timeout reached
+        } else if (transcriptLoaded && attempts >= 120) {
+          // Exit if 2 minute timeout reached
           allDataComplete = true;
         } else if (statusData.status === "failed") {
           setAnalysisStatus("failed");
@@ -794,9 +795,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const handleToolClick = useCallback((toolId: string, value?: string, context?: string) => {
     if (value) {
       if (context) setContextSnippet(context);
-      const shouldOpenSidebar = toolId === TOOL_IDS.ASK || toolId === TOOL_IDS.DEEPDIVE || toolId === "action";
+      const shouldOpenSidebar = toolId === TOOL_IDS.ASK || toolId === TOOL_IDS.DEEPDIVE || toolId === "action" || toolId === "chapters" || toolId === "transcript";
       if (shouldOpenSidebar) {
+        // Force open chat sidebar and bring focus to it
         setIsChatOpen(true);
+        logger.info(`✅ Chat opened automatically for ${toolId}: ${value.substring(0, 50)}...`);
       }
       handleSendMessage(value, context, toolId);
       return;
@@ -849,7 +852,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (toolId === TOOL_IDS.ASK || toolId === "action") {
+    if (toolId === TOOL_IDS.ASK || toolId === "action" || toolId === "chapters") {
       setIsChatOpen(true);
       if (context) setContextSnippet(context);
       if (value) handleSendMessage(value, context, toolId);

@@ -73,6 +73,7 @@ interface SummaryDisplayProps {
   onTabChange?: (tab: string) => void;
   isAutoScroll: boolean;
   setIsAutoScroll: (val: boolean) => void;
+  isLoadingChapters?: boolean;
 }
 
 function parseTimeToSeconds(timeStr: string): number {
@@ -82,12 +83,12 @@ function parseTimeToSeconds(timeStr: string): number {
   return 0;
 }
 
-const SummaryDisplay = ({ 
-  overview, 
-  keyPoints, 
-  takeaways, 
-  timestamps, 
-  tags, 
+const SummaryDisplay = ({
+  overview,
+  keyPoints,
+  takeaways,
+  timestamps,
+  tags,
   transcript,
   learningContext,
   learning_context,
@@ -103,7 +104,8 @@ const SummaryDisplay = ({
   activeTab = "chapters",
   onTabChange,
   isAutoScroll,
-  setIsAutoScroll
+  setIsAutoScroll,
+  isLoadingChapters = false
 }: SummaryDisplayProps) => {
   const resolvedLearningContext = learningContext || learning_context;
   const [copied, setCopied] = useState(false);
@@ -207,47 +209,79 @@ const SummaryDisplay = ({
         >
           {currentTab === "chapters" ? (
              <div className="space-y-12">
-               {timestamps?.map((ts, i) => (
-                  <div key={i} className="group cursor-pointer">
-                    <div className="flex items-start gap-8">
-                       <div className="flex flex-col items-center gap-3">
-                          <button 
-                             onClick={() => onTimestampClick?.(parseTimeToSeconds(ts.time))}
-                             className={cn(
-                                "w-16 h-10 rounded-2xl border flex items-center justify-center text-xs font-black shadow-sm transition-all",
-                                i === activeChapterIndex ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary"
-                             )}
-                          >
-                             {ts.time}
-                          </button>
-                          <div className="w-0.5 flex-1 bg-border rounded-full" />
+               {isLoadingChapters ? (
+                 // Show skeleton loaders while chapters are generating
+                 <>
+                   {[1, 2, 3, 4, 5].map((i) => (
+                     <div key={`skeleton-${i}`} className="animate-pulse">
+                       <div className="flex items-start gap-8">
+                         <div className="flex flex-col items-center gap-3">
+                           <div className="w-16 h-10 rounded-2xl bg-card border border-border" />
+                           <div className="w-0.5 h-20 bg-border rounded-full" />
+                         </div>
+                         <div className="flex-1 space-y-3">
+                           <div className="h-6 bg-card rounded-lg w-2/3" />
+                           <div className="h-4 bg-card rounded-lg w-full" />
+                           <div className="h-4 bg-card rounded-lg w-4/5" />
+                         </div>
                        </div>
-                       <div className="flex-1 pb-12 group-last:pb-0">
-                          <div className="flex items-center justify-between gap-4 mb-2">
-                            <h3 className={cn(
-                                "text-lg font-bold transition-colors",
-                                i === activeChapterIndex ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
-                            )}>{ts.label}</h3>
-                            <Button 
-                                size="sm" 
-                                variant="ghost"
-                                className="h-8 rounded-lg text-[10px] font-bold gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onToolClick?.('chapters', `Explain this section: ${ts.label}`, `[Chapter Context]: ${ts.label} at ${ts.time}`);
-                                }}
+                     </div>
+                   ))}
+                   <div className="flex items-center justify-center gap-2 py-8">
+                     <div className="relative w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
+                     <div className="relative w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
+                     <div className="relative w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
+                     <span className="ml-2 text-sm text-muted-foreground">Generating AI chapters...</span>
+                   </div>
+                 </>
+               ) : (
+                 timestamps?.map((ts, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: i * 0.05 }}
+                      className="group cursor-pointer">
+                      <div className="flex items-start gap-8">
+                         <div className="flex flex-col items-center gap-3">
+                            <button
+                               onClick={() => onTimestampClick?.(parseTimeToSeconds(ts.time))}
+                               className={cn(
+                                  "w-16 h-10 rounded-2xl border flex items-center justify-center text-xs font-black shadow-sm transition-all",
+                                  i === activeChapterIndex ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary"
+                               )}
                             >
-                                <Sparkles className="h-3 w-3" /> Explain
-                            </Button>
-                          </div>
-                          <p className="text-sm font-medium text-muted-foreground leading-relaxed">
-                            Deep analysis of {ts.label.toLowerCase()} covering key concepts and practical applications shared in this section.
-                          </p>
-                       </div>
-                    </div>
-                  </div>
-               ))}
-                 </div>
+                               {ts.time}
+                            </button>
+                            <div className="w-0.5 flex-1 bg-border rounded-full" />
+                         </div>
+                         <div className="flex-1 pb-12 group-last:pb-0">
+                            <div className="flex items-center justify-between gap-4 mb-2">
+                              <h3 className={cn(
+                                  "text-lg font-bold transition-colors",
+                                  i === activeChapterIndex ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
+                              )}>{ts.label}</h3>
+                              <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 rounded-lg text-[10px] font-bold gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => {
+                                      e.stopPropagation();
+                                      onToolClick?.('chapters', `Explain this section: ${ts.label}`, `[Chapter Context]: ${ts.label} at ${ts.time}`);
+                                  }}
+                              >
+                                  <Sparkles className="h-3 w-3" /> Explain
+                              </Button>
+                            </div>
+                            <p className="text-sm font-medium text-muted-foreground leading-relaxed">
+                              Deep analysis of {ts.label.toLowerCase()} covering key concepts and practical applications shared in this section.
+                            </p>
+                         </div>
+                      </div>
+                    </motion.div>
+                 ))
+               )}
+             </div>
           ) : currentTab === "transcripts" ? (
              <div className="space-y-8">
                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 scrollbar-thin">

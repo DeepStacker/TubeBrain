@@ -198,6 +198,13 @@ export default function AnalysisPage() {
     });
   };
 
+  // Determine if chapters are still loading (only have default "Video Content" chapter)
+  const isLoadingChapters = analysisProgress === 100 && (
+    !summaryData?.timestamps ||
+    summaryData.timestamps.length === 0 ||
+    (summaryData.timestamps.length === 1 && summaryData.timestamps[0]?.label === "Video Content")
+  );
+
   const sets = useMemo(() => [
     { id: TOOL_IDS.SUMMARY, name: 'Overview & Insights', date: 'Generated', type: 'summary', isGenerating: false },
     ...(summaryData?.quiz?.length ? [{ id: TOOL_IDS.QUIZ, name: 'Knowledge Quiz', date: 'Generated', type: 'quiz', isGenerating: false }] : []),
@@ -487,6 +494,7 @@ export default function AnalysisPage() {
                             onClearExplanation={clearExplanation}
                             isAutoScroll={isAutoScroll}
                             setIsAutoScroll={setIsAutoScroll}
+                            isLoadingChapters={isLoadingChapters}
                           />
                         )}
                       </div>

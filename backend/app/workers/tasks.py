@@ -104,13 +104,14 @@ async def _generate_chapters_background(
     language: str,
     provider: str,
     model: str,
+    duration_seconds: int = 0,
 ):
     """Generate chapters from transcript in background and update database."""
     try:
         from app.services.ai_pipeline import generate_chapters_from_transcript
         from uuid import UUID
 
-        logger.info(f"Background: Starting chapter generation for analysis {analysis_id}")
+        logger.info(f"Background: Starting chapter generation for analysis {analysis_id} (transcript: {len(transcript_text)} chars)")
         gen_start = time.time()
 
         ai_chapters = await asyncio.wait_for(
@@ -119,9 +120,9 @@ async def _generate_chapters_background(
                 language=language,
                 provider=provider,
                 model=model,
-                duration_seconds=0,
+                duration_seconds=duration_seconds,  # Pass video duration
             ),
-            timeout=15.0
+            timeout=120.0  # Increased to 2min for very long videos (8+ hours = 100k+ words)
         )
         gen_elapsed = time.time() - gen_start
 
@@ -366,6 +367,10 @@ async def process_video_analysis(
             # BACKGROUND: Spawn async AI chapter generation (fire-and-forget)
             # Only if we used default chapters (no metadata chapters)
             if all_transcripts and len(all_transcripts) > 0 and chapters[0].get("label") == "Video Content":
+                duration_seconds = 0
+                if video and hasattr(video, 'duration_seconds'):
+                    duration_seconds = video.duration_seconds or 0
+
                 asyncio.create_task(
                     _generate_chapters_background(
                         analysis_id=str(analysis_id),
@@ -373,9 +378,10 @@ async def process_video_analysis(
                         language=all_metadata[0].get('language', 'en') or 'en' if all_metadata else 'en',
                         provider=analysis.ai_provider,
                         model=analysis.ai_model,
+                        duration_seconds=duration_seconds,
                     )
                 )
-                logger.info(f"Analysis {analysis_id}: Spawned background chapter generation task")
+                logger.info(f"Analysis {analysis_id}: Spawned background chapter generation task (duration: {duration_seconds}s)")
 
             # PHASE 2: ON-DEMAND AI SYNTHESIS (User-triggered, not auto-generated)
             # Phase 1 now returns at 100% (~8-15s) with transcript + chapters (metadata or default)
