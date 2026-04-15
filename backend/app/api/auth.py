@@ -3,7 +3,7 @@
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -306,7 +306,7 @@ async def patch_me(
 from urllib.parse import urlencode
 import secrets
 from typing import Optional
-from fastapi import Request, Response
+from fastapi import Request
 
 def _frontend_redirect(user: User, access_token: str, refresh_token: str) -> RedirectResponse:
     """Redirect browser to the frontend with JWT tokens in query params."""
@@ -343,14 +343,13 @@ async def _upsert_oauth_user(db: AsyncSession, email: str, name: str, avatar_url
 
 
 @router.get("/google/authorize")
-async def google_authorize(response: Response):
+async def google_authorize():
     """Redirect the browser to Google's OAuth authorization page."""
     state = secrets.token_urlsafe(32)
-    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite="lax")
-    
+
     redirect_uri = f"{settings.OAUTH_REDIRECT_BASE}/api/auth/google/callback"
     print(f"DEBUG: Google Redirect URI: {redirect_uri}")
-    
+
     params = urlencode({
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": redirect_uri,
@@ -359,7 +358,17 @@ async def google_authorize(response: Response):
         "access_type": "offline",
         "state": state,
     })
-    return RedirectResponse(url=f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+    redirect_response = RedirectResponse(url=f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+    secure_cookie = settings.OAUTH_REDIRECT_BASE.startswith("https://")
+    redirect_response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        secure=secure_cookie,
+        samesite="none" if secure_cookie else "lax",
+    )
+    return redirect_response
 
 
 @router.get("/google/callback")
@@ -425,17 +434,26 @@ async def google_oauth_get_callback(request: Request, code: str, state: str, db:
 
 
 @router.get("/github/authorize")
-async def github_authorize(response: Response):
+async def github_authorize():
     """Redirect the browser to GitHub's OAuth authorization page."""
     state = secrets.token_urlsafe(32)
-    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite="lax")
-    
+
     params = urlencode({
         "client_id": settings.GITHUB_CLIENT_ID,
         "scope": "user:email",
         "state": state,
     })
-    return RedirectResponse(url=f"https://github.com/login/oauth/authorize?{params}")
+    redirect_response = RedirectResponse(url=f"https://github.com/login/oauth/authorize?{params}")
+    secure_cookie = settings.OAUTH_REDIRECT_BASE.startswith("https://")
+    redirect_response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        secure=secure_cookie,
+        samesite="none" if secure_cookie else "lax",
+    )
+    return redirect_response
 
 
 @router.get("/github/callback")
@@ -503,14 +521,13 @@ async def github_oauth_get_callback(request: Request, code: str, state: str, db:
 
 
 @router.get("/linkedin/authorize")
-async def linkedin_authorize(response: Response):
+async def linkedin_authorize():
     """Redirect the browser to LinkedIn's OAuth authorization page."""
     state = secrets.token_urlsafe(32)
-    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite="lax")
-    
+
     redirect_uri = f"{settings.OAUTH_REDIRECT_BASE}/api/auth/linkedin/callback"
     print(f"DEBUG: LinkedIn Redirect URI: {redirect_uri}")
-    
+
     params = urlencode({
         "response_type": "code",
         "client_id": settings.LINKEDIN_CLIENT_ID,
@@ -518,7 +535,17 @@ async def linkedin_authorize(response: Response):
         "scope": "openid profile email",
         "state": state,
     })
-    return RedirectResponse(url=f"https://www.linkedin.com/oauth/v2/authorization?{params}")
+    redirect_response = RedirectResponse(url=f"https://www.linkedin.com/oauth/v2/authorization?{params}")
+    secure_cookie = settings.OAUTH_REDIRECT_BASE.startswith("https://")
+    redirect_response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        secure=secure_cookie,
+        samesite="none" if secure_cookie else "lax",
+    )
+    return redirect_response
 
 
 @router.get("/linkedin/callback")
