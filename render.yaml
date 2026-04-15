@@ -1,5 +1,7 @@
 # Render.com deployment configuration
-# Optimized for free tier: Frontend as static site + Backend+Worker combined
+# Optimized for free tier: Frontend as static site + Backend+Worker combined.
+# The Docker image starts via /start.sh, which runs scripts/run_migrations.py
+# before launching API + worker, making Render cold starts restart-safe.
 
 services:
   # ── Combined Backend + Worker Service ──

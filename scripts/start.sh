@@ -1,12 +1,12 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "🚀 Starting YouTube Genius Backend..."
+echo "Starting TubeBrain backend service..."
 
-# Run database migrations
-echo "📦 Running database migrations..."
-python -m alembic upgrade head
+# Run migration bootstrap that can recover from schema/alembic-version drift.
+echo "Running database migration bootstrap..."
+python scripts/run_migrations.py
 
 # Start supervisord to manage both backend and worker
-echo "🔧 Starting supervisord..."
+echo "Starting supervisord..."
 exec supervisord -c /etc/supervisord.conf
