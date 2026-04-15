@@ -15,8 +15,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override with environment variable if present
-db_url = os.getenv("DATABASE_URL")
+# Prefer DIRECT_URL when provided, else fall back to DATABASE_URL
+db_url = os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL")
 if db_url:
     # Escape % for configparser interpolation (% -> %%)
     db_url_escaped = db_url.replace("%", "%%")

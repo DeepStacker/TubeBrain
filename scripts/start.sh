@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo "Starting TubeBrain backend service..."
 
-# Run migration bootstrap that can recover from schema/alembic-version drift.
+# Run migration bootstrap that recovers pre-existing schema states safely.
 echo "Running database migration bootstrap..."
 python scripts/run_migrations.py
 
